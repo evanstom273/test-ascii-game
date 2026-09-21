@@ -51,6 +51,11 @@ type DialogueState = {
   response?: string
 }
 
+type InteractionTarget = {
+  index: number
+  name: string
+}
+
 const dialogueResponses = [
   'There is more to this place than the village. Follow the paths and you will find it.',
   'People have stories about that. Most of them get stranger every time they are told.',
@@ -60,6 +65,7 @@ const dialogueResponses = [
 export default function App() {
   const lookPointer = useRef<number | null>(null)
   const [dialogue, setDialogue] = useState<DialogueState | null>(null)
+  const [interactionTarget, setInteractionTarget] = useState<InteractionTarget | null>(null)
   const lastX = useRef(0)
   const lastY = useRef(0)
 
@@ -70,8 +76,17 @@ export default function App() {
       lookPointer.current = null
     }
 
+    const updateInteractionTarget = (event: Event) => {
+      const detail = (event as CustomEvent<InteractionTarget | null>).detail
+      setInteractionTarget(detail)
+    }
+
     window.addEventListener('game-npc-dialogue', openDialogue)
-    return () => window.removeEventListener('game-npc-dialogue', openDialogue)
+    window.addEventListener('game-interact-target', updateInteractionTarget)
+    return () => {
+      window.removeEventListener('game-npc-dialogue', openDialogue)
+      window.removeEventListener('game-interact-target', updateInteractionTarget)
+    }
   }, [])
 
   const closeDialogue = () => {
@@ -130,14 +145,21 @@ export default function App() {
         <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-sm">
           <div className="font-semibold tracking-wider">ASCII 3D // PROTOTYPE 02</div>
           <div className="mt-1 text-amber-200/90">BUILD {import.meta.env.VITE_BUILD_SHA}</div>
-          <div className="mt-1 text-white/70">WASD · mouse look · Shift sprint</div>
+          <div className="mt-1 text-white/70">WASD · mouse look · Shift sprint · E interact</div>
           <div className="text-white/70">Touch: left pad · drag right side to look</div>
         </div>
       </div>
 
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2">
-        <span className="absolute left-0 top-1/2 h-px w-4 bg-white/70" />
-        <span className="absolute left-1/2 top-0 h-4 w-px bg-white/70" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-center">
+        <div className="relative mx-auto h-4 w-4">
+          <span className={`absolute left-0 top-1/2 h-px w-4 ${interactionTarget ? 'bg-amber-300' : 'bg-white/70'}`} />
+          <span className={`absolute left-1/2 top-0 h-4 w-px ${interactionTarget ? 'bg-amber-300' : 'bg-white/70'}`} />
+        </div>
+        {interactionTarget && !dialogue && (
+          <div className="mt-2 whitespace-nowrap rounded-md bg-black/55 px-2 py-1 text-[10px] text-amber-100 backdrop-blur-sm">
+            {interactionTarget.name} · INTERACT
+          </div>
+        )}
       </div>
 
       {!dialogue && <div className="touch-controls absolute bottom-5 left-4 grid grid-cols-3 gap-1">
@@ -149,9 +171,25 @@ export default function App() {
         <HoldButton name="right">▶</HoldButton>
       </div>}
 
-      {!dialogue && <div className="touch-controls absolute bottom-5 right-4">
-        <HoldButton name="sprint">RUN</HoldButton>
-      </div>}
+      {!dialogue && (
+        <div className="absolute bottom-5 right-4 flex items-end gap-2">
+          {interactionTarget && (
+            <button
+              className="touch-controls flex h-16 min-w-20 items-center justify-center rounded-2xl border border-amber-200/35 bg-amber-400/20 px-4 text-sm font-semibold text-amber-50 shadow-lg backdrop-blur-sm"
+              onPointerDown={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                window.dispatchEvent(new CustomEvent('game-interact'))
+              }}
+            >
+              INTERACT
+            </button>
+          )}
+          <div className="touch-controls">
+            <HoldButton name="sprint">RUN</HoldButton>
+          </div>
+        </div>
+      )}
 
       {dialogue && (
         <div
