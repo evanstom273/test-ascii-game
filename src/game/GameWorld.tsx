@@ -531,11 +531,16 @@ function Building({ position, size, color, roof }: BuildingData) {
   const [sx, sy, sz] = size
   const ground = terrainHeight(x, z)
   const y = ground + sy / 2
+  const variant = Math.abs(Math.round(x * 3 + z * 5)) % 4
+  const hasPorch = variant !== 1
+  const hasAnnex = variant === 2 || variant === 3
+  const hasChimney = variant !== 0
+
   const wallTexture = getPixelTexture(`wall-${color}`, color, '#3e3832', 'brick')
   const roofTexture = getPixelTexture(`roof-${roof}`, roof, '#1f1d1c', 'roof')
   const woodTexture = getPixelTexture('building-wood', '#4d3426', '#261a14', 'wood')
-  const roofAngle = 0.52
-  const roofPanelWidth = sx * 0.62
+  const roofAngle = 0.52 + variant * 0.025
+  const roofPanelWidth = sx * 0.64
   const roofRise = Math.tan(roofAngle) * (sx / 2)
   const roofY = ground + sy + roofRise * 0.48
 
@@ -580,16 +585,19 @@ function Building({ position, size, color, roof }: BuildingData) {
   const rightWindow = useRef<THREE.MeshStandardMaterial>(null)
 
   useFrame(() => {
-    const glow = THREE.MathUtils.lerp(2.4, 0.08, worldDaylight)
+    const glow = THREE.MathUtils.lerp(2.2, 0.05, worldDaylight)
     if (leftWindow.current) leftWindow.current.emissiveIntensity = glow
     if (rightWindow.current) rightWindow.current.emissiveIntensity = glow
   })
 
+  const beamColor = variant % 2 === 0 ? '#3d291f' : '#493225'
+  const stoneColor = variant === 1 ? '#77756c' : '#68645b'
+
   return (
     <group>
-      <mesh position={[x, ground + 0.16, z]}>
-        <boxGeometry args={[sx + 0.22, 0.32, sz + 0.22]} />
-        <meshStandardMaterial color="#716b61" roughness={1} />
+      <mesh position={[x, ground + 0.18, z]}>
+        <boxGeometry args={[sx + 0.34, 0.36, sz + 0.34]} />
+        <meshStandardMaterial color={stoneColor} roughness={1} />
       </mesh>
 
       <mesh position={[x, y, z]}>
@@ -597,104 +605,261 @@ function Building({ position, size, color, roof }: BuildingData) {
         <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} />
       </mesh>
 
-      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z + sz / 2 + 0.006]}>
+      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z + sz / 2 + 0.008]}>
         <meshStandardMaterial map={gableTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
-      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z - sz / 2 - 0.006]} rotation-y={Math.PI}>
+      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z - sz / 2 - 0.008]} rotation-y={Math.PI}>
         <meshStandardMaterial map={gableTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
 
-      <mesh position={[x - sx * 0.235, roofY, z]} rotation={[0, 0, roofAngle]}>
-        <boxGeometry args={[roofPanelWidth, 0.18, sz * 1.14]} />
+      <mesh position={[x - sx * 0.24, roofY, z]} rotation={[0, 0, roofAngle]}>
+        <boxGeometry args={[roofPanelWidth, 0.2, sz * 1.18]} />
         <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
       </mesh>
-      <mesh position={[x + sx * 0.235, roofY, z]} rotation={[0, 0, -roofAngle]}>
-        <boxGeometry args={[roofPanelWidth, 0.18, sz * 1.14]} />
+      <mesh position={[x + sx * 0.24, roofY, z]} rotation={[0, 0, -roofAngle]}>
+        <boxGeometry args={[roofPanelWidth, 0.2, sz * 1.18]} />
         <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
       </mesh>
 
-      <mesh position={[x, ground + 1.02, z + sz / 2 + 0.07]}>
-        <boxGeometry args={[0.9, 1.9, 0.11]} />
-        <meshStandardMaterial map={woodTexture} color="#5a3c2b" roughness={1} />
+      <mesh position={[x, ground + sy + roofRise + 0.02, z]}>
+        <boxGeometry args={[0.16, 0.16, sz * 1.2]} />
+        <meshStandardMaterial color="#271d18" roughness={1} />
       </mesh>
-      <mesh position={[x + 0.28, ground + 1.03, z + sz / 2 + 0.14]}>
+
+      {hasChimney && (
+        <group position={[x + sx * 0.28, ground + sy + roofRise * 0.65, z - sz * 0.16]}>
+          <mesh>
+            <boxGeometry args={[0.5, 1.7, 0.5]} />
+            <meshStandardMaterial
+              map={getPixelTexture('chimney-stone', '#69645d', '#403d38', 'brick')}
+              color="#b0aaa1"
+              roughness={1}
+            />
+          </mesh>
+          <mesh position={[0, 0.92, 0]}>
+            <boxGeometry args={[0.62, 0.14, 0.62]} />
+            <meshStandardMaterial color="#45413d" roughness={1} />
+          </mesh>
+        </group>
+      )}
+
+      <mesh position={[x, ground + 1.02, z + sz / 2 + 0.09]}>
+        <boxGeometry args={[0.92, 1.92, 0.14]} />
+        <meshStandardMaterial map={woodTexture} color="#543728" roughness={1} />
+      </mesh>
+      <mesh position={[x + 0.28, ground + 1.03, z + sz / 2 + 0.18]}>
         <sphereGeometry args={[0.055, 8, 8]} />
         <meshStandardMaterial color="#b38a50" metalness={0.3} roughness={0.55} />
       </mesh>
 
-      {[-0.29, 0.29].map((offset, i) => (
-        <group key={offset} position={[x + sx * offset, ground + sy * 0.58, z + sz / 2 + 0.075]}>
+      {[-0.3, 0.3].map((offset, i) => (
+        <group key={offset} position={[x + sx * offset, ground + sy * 0.58, z + sz / 2 + 0.09]}>
           <mesh>
-            <boxGeometry args={[0.94, 1.08, 0.12]} />
-            <meshStandardMaterial map={woodTexture} color="#503728" roughness={1} />
+            <boxGeometry args={[0.98, 1.12, 0.14]} />
+            <meshStandardMaterial map={woodTexture} color="#4b3327" roughness={1} />
           </mesh>
-          <mesh position={[0, 0, 0.081]}>
-            <planeGeometry args={[0.7, 0.82]} />
+          <mesh position={[0, 0, 0.085]}>
+            <planeGeometry args={[0.72, 0.84]} />
             <meshStandardMaterial
               ref={i === 0 ? leftWindow : rightWindow}
-              color="#d9b76e"
-              emissive="#d98b2f"
-              emissiveIntensity={0.2}
-              roughness={0.45}
+              color="#d8b66f"
+              emissive="#d8892f"
+              emissiveIntensity={0.15}
+              roughness={0.4}
             />
           </mesh>
-          <mesh position={[0, 0, 0.108]}>
-            <boxGeometry args={[0.055, 0.82, 0.022]} />
-            <meshStandardMaterial color="#4a3428" roughness={0.9} />
+          <mesh position={[0, 0, 0.116]}>
+            <boxGeometry args={[0.055, 0.84, 0.026]} />
+            <meshStandardMaterial color="#402b22" roughness={0.9} />
           </mesh>
-          <mesh position={[0, 0, 0.11]}>
-            <boxGeometry args={[0.7, 0.055, 0.022]} />
-            <meshStandardMaterial color="#4a3428" roughness={0.9} />
+          <mesh position={[0, 0, 0.118]}>
+            <boxGeometry args={[0.72, 0.055, 0.026]} />
+            <meshStandardMaterial color="#402b22" roughness={0.9} />
           </mesh>
+          {variant === 3 && (
+            <>
+              <mesh position={[-0.5, 0, 0.04]} rotation-y={0.14}>
+                <boxGeometry args={[0.08, 1.04, 0.08]} />
+                <meshStandardMaterial color={beamColor} roughness={1} />
+              </mesh>
+              <mesh position={[0.5, 0, 0.04]} rotation-y={-0.14}>
+                <boxGeometry args={[0.08, 1.04, 0.08]} />
+                <meshStandardMaterial color={beamColor} roughness={1} />
+              </mesh>
+            </>
+          )}
         </group>
       ))}
 
-      <mesh position={[x - sx * 0.38, ground + sy * 0.52, z + sz / 2 + 0.075]}>
-        <boxGeometry args={[0.14, sy * 0.9, 0.14]} />
-        <meshStandardMaterial map={woodTexture} color="#493226" roughness={1} />
+      {[-0.4, 0, 0.4].map((offset) => (
+        <mesh key={offset} position={[x + sx * offset, ground + sy * 0.5, z + sz / 2 + 0.07]}>
+          <boxGeometry args={[0.12, sy * 0.92, 0.12]} />
+          <meshStandardMaterial map={woodTexture} color={beamColor} roughness={1} />
+        </mesh>
+      ))}
+
+      <mesh position={[x, ground + sy * 0.72, z + sz / 2 + 0.07]}>
+        <boxGeometry args={[sx * 0.92, 0.12, 0.12]} />
+        <meshStandardMaterial map={woodTexture} color={beamColor} roughness={1} />
       </mesh>
-      <mesh position={[x + sx * 0.38, ground + sy * 0.52, z + sz / 2 + 0.075]}>
-        <boxGeometry args={[0.14, sy * 0.9, 0.14]} />
-        <meshStandardMaterial map={woodTexture} color="#493226" roughness={1} />
-      </mesh>
+
+      {hasPorch && (
+        <group position={[x, ground, z + sz / 2 + 0.76]}>
+          <mesh position={[0, 0.12, 0]}>
+            <boxGeometry args={[Math.min(2.5, sx * 0.64), 0.24, 1.2]} />
+            <meshStandardMaterial map={woodTexture} color="#6a4935" roughness={1} />
+          </mesh>
+          <mesh position={[-0.82, 1.15, 0.35]}>
+            <boxGeometry args={[0.12, 2.1, 0.12]} />
+            <meshStandardMaterial color={beamColor} roughness={1} />
+          </mesh>
+          <mesh position={[0.82, 1.15, 0.35]}>
+            <boxGeometry args={[0.12, 2.1, 0.12]} />
+            <meshStandardMaterial color={beamColor} roughness={1} />
+          </mesh>
+          <mesh position={[0, 2.05, 0.25]} rotation-x={-0.14}>
+            <boxGeometry args={[2.2, 0.12, 1.45]} />
+            <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
+          </mesh>
+        </group>
+      )}
+
+      {hasAnnex && (
+        <group position={[x + sx / 2 + 1.0, ground, z + sz * 0.1]}>
+          <mesh position={[0, 1.05, 0]}>
+            <boxGeometry args={[2.0, 2.1, Math.max(2.1, sz * 0.72)]} />
+            <meshStandardMaterial map={wallTexture} color="#f0eee7" roughness={1} />
+          </mesh>
+          <mesh position={[0, 2.34, 0]} rotation-z={-0.22}>
+            <boxGeometry args={[2.3, 0.16, Math.max(2.35, sz * 0.8)]} />
+            <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
+          </mesh>
+        </group>
+      )}
     </group>
   )
 }
 
 function makeNpcTexture(data: NpcData) {
   const canvas = document.createElement('canvas')
-  canvas.width = 32
-  canvas.height = 48
+  canvas.width = 64
+  canvas.height = 96
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas unavailable')
 
   ctx.imageSmoothingEnabled = false
-  ctx.clearRect(0, 0, 32, 48)
+  ctx.clearRect(0, 0, 64, 96)
 
-  ctx.fillStyle = '#00000033'
-  ctx.fillRect(8, 43, 16, 3)
+  const shade = (hex: string, amount: number) => {
+    const c = new THREE.Color(hex)
+    c.offsetHSL(0, 0, amount)
+    return '#' + c.getHexString()
+  }
+
+  const skinDark = shade(data.skin, -0.1)
+  const skinLight = shade(data.skin, 0.07)
+  const shirtDark = shade(data.shirt, -0.12)
+  const shirtLight = shade(data.shirt, 0.08)
+  const trouserLight = shade(data.trousers, 0.05)
+
+  ctx.fillStyle = '#00000044'
+  ctx.fillRect(15, 88, 34, 4)
+
+  // Legs and boots.
   ctx.fillStyle = data.trousers
-  ctx.fillRect(10, 29, 5, 14)
-  ctx.fillRect(17, 29, 5, 14)
+  ctx.fillRect(21, 61, 9, 25)
+  ctx.fillRect(35, 61, 9, 25)
+  ctx.fillStyle = trouserLight
+  ctx.fillRect(22, 61, 3, 22)
+  ctx.fillRect(36, 61, 3, 22)
+  ctx.fillStyle = '#17191d'
+  ctx.fillRect(18, 84, 13, 6)
+  ctx.fillRect(34, 84, 13, 6)
+
+  // Torso with tapered silhouette.
+  ctx.fillStyle = shirtDark
+  ctx.fillRect(15, 38, 35, 26)
+  ctx.fillRect(18, 34, 29, 32)
   ctx.fillStyle = data.shirt
-  ctx.fillRect(8, 17, 16, 14)
-  ctx.fillRect(5, 19, 4, 11)
-  ctx.fillRect(23, 19, 4, 11)
+  ctx.fillRect(20, 35, 24, 29)
+  ctx.fillStyle = shirtLight
+  ctx.fillRect(21, 36, 5, 26)
+
+  // Arms.
+  ctx.fillStyle = shirtDark
+  ctx.fillRect(10, 39, 9, 22)
+  ctx.fillRect(46, 39, 9, 22)
   ctx.fillStyle = data.skin
-  ctx.fillRect(11, 7, 10, 11)
-  ctx.fillRect(5, 29, 4, 4)
-  ctx.fillRect(23, 29, 4, 4)
+  ctx.fillRect(11, 58, 8, 9)
+  ctx.fillRect(46, 58, 8, 9)
+  ctx.fillStyle = skinLight
+  ctx.fillRect(12, 59, 3, 7)
+  ctx.fillRect(47, 59, 3, 7)
+
+  // Neck.
+  ctx.fillStyle = skinDark
+  ctx.fillRect(27, 30, 11, 7)
+  ctx.fillStyle = data.skin
+  ctx.fillRect(29, 30, 8, 7)
+
+  // Head / jaw.
+  ctx.fillStyle = skinDark
+  ctx.fillRect(20, 11, 25, 22)
+  ctx.fillRect(23, 7, 20, 29)
+  ctx.fillStyle = data.skin
+  ctx.fillRect(23, 10, 20, 22)
+  ctx.fillRect(26, 31, 14, 4)
+  ctx.fillStyle = skinLight
+  ctx.fillRect(24, 11, 5, 17)
+
+  // Hair silhouette.
   ctx.fillStyle = data.hair
-  ctx.fillRect(10, 5, 12, 5)
-  ctx.fillRect(9, 7, 3, 5)
-  ctx.fillStyle = '#2a211f'
-  ctx.fillRect(13, 12, 2, 2)
-  ctx.fillRect(18, 12, 2, 2)
-  ctx.fillStyle = '#7d4b3d'
-  ctx.fillRect(15, 16, 3, 1)
-  ctx.fillStyle = '#14171b'
-  ctx.fillRect(9, 42, 7, 3)
-  ctx.fillRect(17, 42, 7, 3)
+  ctx.fillRect(21, 5, 24, 8)
+  ctx.fillRect(18, 9, 8, 15)
+  ctx.fillRect(40, 8, 7, 12)
+  ctx.fillRect(25, 3, 16, 5)
+  if (data.name === 'Mara' || data.name === 'Iris') {
+    ctx.fillRect(17, 12, 6, 19)
+    ctx.fillRect(43, 12, 6, 18)
+  }
+  if (data.name === 'Elias') {
+    ctx.fillRect(19, 4, 28, 6)
+    ctx.fillRect(20, 2, 21, 5)
+  }
+
+  // Brows / eyes / nose / mouth.
+  ctx.fillStyle = shade(data.hair, -0.08)
+  ctx.fillRect(25, 17, 6, 2)
+  ctx.fillRect(36, 17, 6, 2)
+  ctx.fillStyle = '#252329'
+  ctx.fillRect(27, 20, 3, 4)
+  ctx.fillRect(37, 20, 3, 4)
+  ctx.fillStyle = skinDark
+  ctx.fillRect(32, 22, 3, 5)
+  ctx.fillStyle = '#7d4b43'
+  ctx.fillRect(29, 28, 10, 2)
+
+  // Small clothing details to stop every NPC reading as the same template.
+  if (data.name === 'Nora') {
+    ctx.fillStyle = '#c4a37e'
+    ctx.fillRect(29, 38, 7, 16)
+    ctx.fillStyle = '#8c714f'
+    ctx.fillRect(31, 40, 3, 14)
+  } else if (data.name === 'Elias') {
+    ctx.fillStyle = '#273b45'
+    ctx.fillRect(20, 37, 24, 4)
+    ctx.fillRect(30, 37, 4, 27)
+  } else if (data.name === 'Mara') {
+    ctx.fillStyle = '#b293c7'
+    ctx.fillRect(24, 39, 16, 4)
+    ctx.fillRect(30, 43, 4, 17)
+  } else if (data.name === 'Tomas') {
+    ctx.fillStyle = '#49452b'
+    ctx.fillRect(17, 42, 31, 5)
+  } else {
+    ctx.fillStyle = '#91a1c5'
+    ctx.fillRect(22, 38, 20, 3)
+  }
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -721,7 +886,7 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
 
     if (activeNpcIndex === index) {
       npc.position.y = terrainHeight(npc.position.x, npc.position.z)
-      visual.position.y = 1.18
+      visual.position.y = 1.16
       return
     }
 
@@ -747,7 +912,7 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
 
     npc.position.y = terrainHeight(npc.position.x, npc.position.z)
     walkTime.current += delta * 7
-    visual.position.y = 1.18 + Math.abs(Math.sin(walkTime.current)) * 0.035
+    visual.position.y = 1.16 + Math.abs(Math.sin(walkTime.current)) * 0.035
   })
 
   useEffect(() => {
@@ -763,7 +928,7 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
       ref={root}
       position={[data.start[0], terrainHeight(data.start[0], data.start[1]), data.start[1]]}
     >
-      <sprite ref={sprite} position={[0, 1.18, 0]} scale={[1.45, 2.2, 1]} raycast={() => null}>
+      <sprite ref={sprite} position={[0, 1.16, 0]} scale={[1.18, 2.25, 1]} raycast={() => null}>
         <spriteMaterial map={texture} transparent alphaTest={0.18} depthWrite toneMapped={false} />
       </sprite>
 
@@ -780,6 +945,195 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>
+  )
+}
+
+function GrassField() {
+  const mesh = useRef<THREE.InstancedMesh>(null)
+  const count = 900
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+  const color = useMemo(() => new THREE.Color(), [])
+
+  useEffect(() => {
+    const instanced = mesh.current
+    if (!instanced) return
+
+    let placed = 0
+    let seedIndex = 0
+
+    while (placed < count && seedIndex < count * 8) {
+      const x = -55 + seeded(seedIndex + 500) * 110
+      const z = -55 + seeded(seedIndex + 1200) * 110
+      seedIndex += 1
+
+      if (isVillagePath(x, z)) continue
+      if (Math.hypot(x - 31, z - 30) < 9) continue
+      if (buildings.some((b) => Math.abs(x - b.position[0]) < b.size[0] * 0.75 && Math.abs(z - b.position[1]) < b.size[2] * 0.75)) continue
+
+      const y = terrainHeight(x, z)
+      const scale = 0.55 + seeded(seedIndex + 1800) * 0.8
+      dummy.position.set(x, y + 0.16 * scale, z)
+      dummy.rotation.set(
+        seeded(seedIndex + 1900) * 0.12 - 0.06,
+        seeded(seedIndex + 2000) * Math.PI * 2,
+        seeded(seedIndex + 2100) * 0.14 - 0.07,
+      )
+      dummy.scale.set(0.65 * scale, scale, 0.65 * scale)
+      dummy.updateMatrix()
+      instanced.setMatrixAt(placed, dummy.matrix)
+
+      color.set(placed % 3 === 0 ? '#80935d' : placed % 3 === 1 ? '#6f8352' : '#91a568')
+      instanced.setColorAt(placed, color)
+      placed += 1
+    }
+
+    instanced.count = placed
+    instanced.instanceMatrix.needsUpdate = true
+    if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true
+  }, [color, dummy])
+
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, count]}>
+      <coneGeometry args={[0.055, 0.42, 3]} />
+      <meshStandardMaterial roughness={1} vertexColors />
+    </instancedMesh>
+  )
+}
+
+function Crate({ x, z, rotation = 0 }: { x: number; z: number; rotation?: number }) {
+  const y = terrainHeight(x, z)
+  const wood = getPixelTexture('crate-wood', '#6b4933', '#2f2018', 'wood')
+  return (
+    <group position={[x, y, z]} rotation-y={rotation}>
+      <mesh position={[0, 0.36, 0]}>
+        <boxGeometry args={[0.7, 0.7, 0.7]} />
+        <meshStandardMaterial map={wood} color="#9a704f" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.36, 0.36]}>
+        <boxGeometry args={[0.78, 0.08, 0.08]} />
+        <meshStandardMaterial color="#3a281e" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.36, -0.36]}>
+        <boxGeometry args={[0.78, 0.08, 0.08]} />
+        <meshStandardMaterial color="#3a281e" roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+function Barrel({ x, z }: { x: number; z: number }) {
+  const y = terrainHeight(x, z)
+  return (
+    <group position={[x, y, z]}>
+      <mesh position={[0, 0.42, 0]}>
+        <cylinderGeometry args={[0.32, 0.36, 0.84, 10]} />
+        <meshStandardMaterial
+          map={getPixelTexture('barrel-wood', '#6c4a32', '#2e2119', 'wood')}
+          color="#8c6447"
+          roughness={1}
+        />
+      </mesh>
+      {[-0.25, 0.25].map((yy) => (
+        <mesh key={yy} position={[0, 0.42 + yy, 0]}>
+          <torusGeometry args={[0.34, 0.025, 5, 12]} />
+          <meshStandardMaterial color="#2e3034" roughness={0.7} metalness={0.2} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function Bench({ x, z, rotation = 0 }: { x: number; z: number; rotation?: number }) {
+  const y = terrainHeight(x, z)
+  return (
+    <group position={[x, y, z]} rotation-y={rotation}>
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[1.8, 0.16, 0.5]} />
+        <meshStandardMaterial color="#684b35" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.95, 0.2]} rotation-x={-0.12}>
+        <boxGeometry args={[1.8, 0.16, 0.55]} />
+        <meshStandardMaterial color="#60432f" roughness={1} />
+      </mesh>
+      {[-0.65, 0.65].map((xx) => (
+        <mesh key={xx} position={[xx, 0.25, 0]}>
+          <boxGeometry args={[0.12, 0.5, 0.38]} />
+          <meshStandardMaterial color="#31261f" roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function Well() {
+  const x = 2.8
+  const z = 1.8
+  const y = terrainHeight(x, z)
+  return (
+    <group position={[x, y, z]}>
+      <mesh position={[0, 0.55, 0]}>
+        <cylinderGeometry args={[0.9, 1.0, 1.0, 12, 1, true]} />
+        <meshStandardMaterial
+          map={getPixelTexture('well-stone', '#77746c', '#4f4d47', 'brick')}
+          color="#a19d94"
+          roughness={1}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {[-0.8, 0.8].map((xx) => (
+        <mesh key={xx} position={[xx, 1.65, 0]}>
+          <boxGeometry args={[0.12, 2.2, 0.12]} />
+          <meshStandardMaterial color="#4d3728" roughness={1} />
+        </mesh>
+      ))}
+      <mesh position={[0, 2.52, 0]} rotation-z={0.22}>
+        <boxGeometry args={[2.15, 0.14, 1.35]} />
+        <meshStandardMaterial color="#3d3027" roughness={1} />
+      </mesh>
+      <mesh position={[0, 1.45, 0]}>
+        <cylinderGeometry args={[0.11, 0.11, 1.35, 8]} />
+        <meshStandardMaterial color="#473225" roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+function Signpost() {
+  const x = -2.8
+  const z = 5.4
+  const y = terrainHeight(x, z)
+  return (
+    <group position={[x, y, z]} rotation-y={0.4}>
+      <mesh position={[0, 1.1, 0]}>
+        <boxGeometry args={[0.13, 2.2, 0.13]} />
+        <meshStandardMaterial color="#4c3627" roughness={1} />
+      </mesh>
+      <mesh position={[0.62, 1.72, 0]}>
+        <boxGeometry args={[1.35, 0.38, 0.14]} />
+        <meshStandardMaterial color="#75543b" roughness={1} />
+      </mesh>
+      <mesh position={[-0.5, 1.22, 0]}>
+        <boxGeometry args={[1.1, 0.34, 0.14]} />
+        <meshStandardMaterial color="#674832" roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+function VillageProps() {
+  return (
+    <>
+      <Well />
+      <Signpost />
+      <Bench x={-4.8} z={1.6} rotation={0.25} />
+      <Bench x={5.1} z={0.8} rotation={-0.35} />
+      <Crate x={-6.1} z={-5.8} rotation={0.2} />
+      <Crate x={-5.45} z={-5.65} rotation={-0.15} />
+      <Crate x={12.2} z={-6.2} rotation={0.5} />
+      <Barrel x={-8.7} z={6.8} />
+      <Barrel x={-8.15} z={6.5} />
+      <Barrel x={13.4} z={7.2} />
+    </>
   )
 }
 
@@ -1034,6 +1388,8 @@ export default function GameWorld() {
       <InteractionController />
       <DayNight />
       <Terrain />
+      <GrassField />
+      <VillageProps />
       <Pond />
       <Ruins />
       <HillMarker />
