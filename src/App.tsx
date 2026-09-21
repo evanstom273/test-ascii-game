@@ -79,7 +79,6 @@ export default function App() {
       }}
     >
       <Canvas
-        shadows
         camera={{ fov: 70, near: 0.3, far: 180, position: [0, 2.4, 8] }}
         gl={{
           antialias: true,
@@ -97,6 +96,7 @@ export default function App() {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-between gap-4 p-3 text-[11px] sm:text-xs">
         <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-sm">
           <div className="font-semibold tracking-wider">ASCII 3D // PROTOTYPE 02</div>
+          <div className="mt-1 text-amber-200/90">BUILD {import.meta.env.VITE_BUILD_SHA}</div>
           <div className="mt-1 text-white/70">WASD · mouse look · Shift sprint</div>
           <div className="text-white/70">Touch: left pad · drag right side to look</div>
         </div>
