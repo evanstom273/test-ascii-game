@@ -33,6 +33,8 @@ const controls: Controls = {
   sprint: false,
 }
 
+let worldDaylight = 1
+
 const PLAYER_RADIUS = 0.38
 const WORLD_LIMIT = 58
 const TREE_RADIUS = 0.72
@@ -91,27 +93,27 @@ function getPixelTexture(
   if (cached) return cached
 
   const canvas = document.createElement('canvas')
-  canvas.width = 64
-  canvas.height = 64
+  canvas.width = 128
+  canvas.height = 128
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas unavailable')
 
   ctx.imageSmoothingEnabled = false
   ctx.fillStyle = base
-  ctx.fillRect(0, 0, 64, 64)
+  ctx.fillRect(0, 0, 128, 128)
 
   const random = (n: number) => seeded(n + key.length * 17)
 
   if (kind === 'brick') {
     ctx.strokeStyle = accent
     ctx.lineWidth = 2
-    for (let y = 0; y <= 64; y += 12) {
+    for (let y = 0; y <= 128; y += 12) {
       ctx.beginPath()
       ctx.moveTo(0, y)
       ctx.lineTo(64, y)
       ctx.stroke()
       const offset = ((y / 12) % 2) * 10
-      for (let x = -offset; x < 64; x += 20) {
+      for (let x = -offset; x < 128; x += 20) {
         ctx.beginPath()
         ctx.moveTo(x, y)
         ctx.lineTo(x, y + 12)
@@ -120,15 +122,15 @@ function getPixelTexture(
     }
   } else if (kind === 'roof') {
     ctx.fillStyle = accent
-    for (let y = 0; y < 64; y += 8) {
-      for (let x = (y / 8) % 2 ? -6 : 0; x < 64; x += 12) {
+    for (let y = 0; y < 128; y += 8) {
+      for (let x = (y / 8) % 2 ? -6 : 0; x < 128; x += 12) {
         ctx.fillRect(x, y, 10, 2)
       }
     }
   } else if (kind === 'wood') {
     ctx.strokeStyle = accent
     ctx.lineWidth = 1
-    for (let x = 4; x < 64; x += 8) {
+    for (let x = 4; x < 128; x += 8) {
       ctx.beginPath()
       ctx.moveTo(x, 0)
       ctx.lineTo(x + Math.sin(x) * 2, 64)
@@ -137,16 +139,16 @@ function getPixelTexture(
   } else if (kind === 'gravel') {
     ctx.fillStyle = accent
     for (let i = 0; i < 170; i += 1) {
-      const x = Math.floor(random(i + 1) * 64)
-      const y = Math.floor(random(i + 200) * 64)
+      const x = Math.floor(random(i + 1) * 128)
+      const y = Math.floor(random(i + 200) * 128)
       const size = 1 + Math.floor(random(i + 400) * 2)
       ctx.fillRect(x, y, size, size)
     }
   } else {
     const baseColor = new THREE.Color(base)
     const accentColor = new THREE.Color(accent)
-    for (let y = 0; y < 64; y += 4) {
-      for (let x = 0; x < 64; x += 4) {
+    for (let y = 0; y < 128; y += 4) {
+      for (let x = 0; x < 128; x += 4) {
         const t = random(x * 13 + y * 31) * 0.55
         const c = baseColor.clone().lerp(accentColor, t)
         ctx.fillStyle = '#' + c.getHexString()
@@ -157,12 +159,12 @@ function getPixelTexture(
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
-  texture.magFilter = THREE.LinearFilter
+  texture.magFilter = THREE.NearestFilter
   texture.minFilter = THREE.LinearMipmapLinearFilter
   texture.generateMipmaps = true
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(1, 1)
+  texture.repeat.set(2, 2)
   texture.anisotropy = 8
   textureCache.set(key, texture)
   return texture
@@ -433,7 +435,26 @@ function Building({ position, size, color, roof }: BuildingData) {
   const woodTexture = getPixelTexture('building-wood', '#4d3426', '#261a14', 'wood')
   const roofAngle = 0.52
   const roofPanelWidth = sx * 0.62
-  const roofY = ground + sy + 0.48
+  const roofRise = Math.tan(roofAngle) * (sx / 2)
+  const roofY = ground + sy + roofRise * 0.48
+
+  const gableShape = useMemo(() => {
+    const shape = new THREE.Shape()
+    shape.moveTo(-sx / 2, 0)
+    shape.lineTo(sx / 2, 0)
+    shape.lineTo(0, roofRise)
+    shape.closePath()
+    return shape
+  }, [sx, roofRise])
+
+  const leftWindow = useRef<THREE.MeshStandardMaterial>(null)
+  const rightWindow = useRef<THREE.MeshStandardMaterial>(null)
+
+  useFrame(() => {
+    const glow = THREE.MathUtils.lerp(2.4, 0.08, worldDaylight)
+    if (leftWindow.current) leftWindow.current.emissiveIntensity = glow
+    if (rightWindow.current) rightWindow.current.emissiveIntensity = glow
+  })
 
   return (
     <group>
@@ -447,50 +468,65 @@ function Building({ position, size, color, roof }: BuildingData) {
         <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} />
       </mesh>
 
+      <mesh position={[x, ground + sy + 0.002, z + sz / 2 + 0.004]}>
+        <shapeGeometry args={[gableShape]} />
+        <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[x, ground + sy + 0.002, z - sz / 2 - 0.004]} rotation-y={Math.PI}>
+        <shapeGeometry args={[gableShape]} />
+        <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
+      </mesh>
+
       <mesh position={[x - sx * 0.235, roofY, z]} rotation={[0, 0, roofAngle]}>
-        <boxGeometry args={[roofPanelWidth, 0.18, sz * 1.12]} />
+        <boxGeometry args={[roofPanelWidth, 0.18, sz * 1.14]} />
         <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
       </mesh>
       <mesh position={[x + sx * 0.235, roofY, z]} rotation={[0, 0, -roofAngle]}>
-        <boxGeometry args={[roofPanelWidth, 0.18, sz * 1.12]} />
+        <boxGeometry args={[roofPanelWidth, 0.18, sz * 1.14]} />
         <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
       </mesh>
 
-      <mesh position={[x, ground + 1.02, z + sz / 2 + 0.055]}>
-        <boxGeometry args={[0.9, 1.9, 0.1]} />
+      <mesh position={[x, ground + 1.02, z + sz / 2 + 0.07]}>
+        <boxGeometry args={[0.9, 1.9, 0.11]} />
         <meshStandardMaterial map={woodTexture} color="#5a3c2b" roughness={1} />
       </mesh>
-      <mesh position={[x + 0.28, ground + 1.03, z + sz / 2 + 0.115]}>
-        <sphereGeometry args={[0.055, 6, 6]} />
-        <meshStandardMaterial color="#b38a50" metalness={0.25} roughness={0.6} />
+      <mesh position={[x + 0.28, ground + 1.03, z + sz / 2 + 0.14]}>
+        <sphereGeometry args={[0.055, 8, 8]} />
+        <meshStandardMaterial color="#b38a50" metalness={0.3} roughness={0.55} />
       </mesh>
 
-      {[-0.29, 0.29].map((offset) => (
-        <group key={offset} position={[x + sx * offset, ground + sy * 0.58, z + sz / 2 + 0.06]}>
+      {[-0.29, 0.29].map((offset, i) => (
+        <group key={offset} position={[x + sx * offset, ground + sy * 0.58, z + sz / 2 + 0.075]}>
           <mesh>
-            <boxGeometry args={[0.94, 1.08, 0.11]} />
+            <boxGeometry args={[0.94, 1.08, 0.12]} />
             <meshStandardMaterial map={woodTexture} color="#503728" roughness={1} />
           </mesh>
-          <mesh position={[0, 0, 0.075]}>
+          <mesh position={[0, 0, 0.081]}>
             <planeGeometry args={[0.7, 0.82]} />
-            <meshStandardMaterial color="#d9b76e" emissive="#5a3a12" emissiveIntensity={0.32} roughness={0.55} />
+            <meshStandardMaterial
+              ref={i === 0 ? leftWindow : rightWindow}
+              color="#d9b76e"
+              emissive="#d98b2f"
+              emissiveIntensity={0.2}
+              roughness={0.45}
+            />
           </mesh>
-          <mesh position={[0, 0, 0.105]}>
-            <boxGeometry args={[0.055, 0.82, 0.025]} />
+          <mesh position={[0, 0, 0.108]}>
+            <boxGeometry args={[0.055, 0.82, 0.022]} />
             <meshStandardMaterial color="#4a3428" roughness={0.9} />
           </mesh>
-          <mesh position={[0, 0, 0.106]}>
-            <boxGeometry args={[0.7, 0.055, 0.025]} />
-            <meshBasicMaterial color="#4a3428" />
+          <mesh position={[0, 0, 0.11]}>
+            <boxGeometry args={[0.7, 0.055, 0.022]} />
+            <meshStandardMaterial color="#4a3428" roughness={0.9} />
           </mesh>
         </group>
       ))}
 
-      <mesh position={[x - sx * 0.38, ground + sy * 0.52, z + sz / 2 + 0.058]}>
+      <mesh position={[x - sx * 0.38, ground + sy * 0.52, z + sz / 2 + 0.075]}>
         <boxGeometry args={[0.14, sy * 0.9, 0.14]} />
         <meshStandardMaterial map={woodTexture} color="#493226" roughness={1} />
       </mesh>
-      <mesh position={[x + sx * 0.38, ground + sy * 0.52, z + sz / 2 + 0.058]}>
+      <mesh position={[x + sx * 0.38, ground + sy * 0.52, z + sz / 2 + 0.075]}>
         <boxGeometry args={[0.14, sy * 0.9, 0.14]} />
         <meshStandardMaterial map={woodTexture} color="#493226" roughness={1} />
       </mesh>
@@ -660,58 +696,142 @@ function HillMarker() {
 }
 
 
+function PathStrip({
+  x,
+  z,
+  width,
+  depth,
+  tone,
+}: {
+  x: number
+  z: number
+  width: number
+  depth: number
+  tone: string
+}) {
+  const geometry = useMemo(() => {
+    const ws = Math.max(4, Math.ceil(width / 0.8))
+    const ds = Math.max(4, Math.ceil(depth / 0.8))
+    const geo = new THREE.PlaneGeometry(width, depth, ws, ds)
+    geo.rotateX(-Math.PI / 2)
+    const p = geo.attributes.position
+
+    for (let i = 0; i < p.count; i += 1) {
+      const lx = p.getX(i)
+      const lz = p.getZ(i)
+      p.setY(i, terrainHeight(x + lx, z + lz) + 0.11)
+    }
+
+    p.needsUpdate = true
+    geo.computeVertexNormals()
+    return geo
+  }, [x, z, width, depth])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return (
+    <mesh geometry={geometry} position={[x, 0, z]}>
+      <meshStandardMaterial
+        map={getPixelTexture('path-hires', '#887a61', '#5b5142', 'gravel')}
+        color={tone}
+        roughness={1}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-4}
+      />
+    </mesh>
+  )
+}
+
+function VillagePaths() {
+  return (
+    <>
+      <PathStrip x={0} z={1} width={4.2} depth={36} tone="#82765f" />
+      <PathStrip x={-2.5} z={-5} width={24} depth={2.6} tone="#786d59" />
+      <PathStrip x={9} z={7} width={16} depth={2.2} tone="#766b57" />
+      <PathStrip x={-10} z={9} width={14} depth={2.1} tone="#746854" />
+    </>
+  )
+}
+
 function DayNight() {
   const sun = useRef<THREE.DirectionalLight>(null)
   const moon = useRef<THREE.DirectionalLight>(null)
   const hemi = useRef<THREE.HemisphereLight>(null)
   const ambient = useRef<THREE.AmbientLight>(null)
+  const sunDisc = useRef<THREE.Mesh>(null)
+  const moonDisc = useRef<THREE.Mesh>(null)
   const { scene } = useThree()
-  const clock = useRef(0.22)
-  const night = useMemo(() => new THREE.Color('#03050c'), [])
-  const dusk = useMemo(() => new THREE.Color('#704b55'), [])
-  const day = useMemo(() => new THREE.Color('#7ca5c9'), [])
+  const clock = useRef(0.20)
+  const night = useMemo(() => new THREE.Color('#02040a'), [])
+  const dusk = useMemo(() => new THREE.Color('#8c5960'), [])
+  const day = useMemo(() => new THREE.Color('#82b0d6'), [])
   const sky = useMemo(() => new THREE.Color(), [])
 
   useFrame((_, delta) => {
-    clock.current = (clock.current + delta * 0.01) % 1
+    clock.current = (clock.current + delta * 0.012) % 1
     const angle = clock.current * Math.PI * 2 - Math.PI / 2
     const sunHeight = Math.sin(angle)
-    const daylight = THREE.MathUtils.smoothstep(sunHeight, -0.08, 0.28)
+    const daylight = THREE.MathUtils.smoothstep(sunHeight, -0.10, 0.30)
     const twilight = Math.max(0, 1 - Math.abs(sunHeight) * 4)
+    worldDaylight = daylight
+
+    const sx = Math.cos(angle) * 70
+    const sy = sunHeight * 60
+    const sz = Math.sin(angle) * 45
 
     if (sun.current) {
-      sun.current.position.set(Math.cos(angle) * 45, sunHeight * 55, Math.sin(angle) * 35)
-      sun.current.intensity = daylight * 4.5
-      sun.current.color.set(daylight < 0.55 ? '#ff9f6b' : '#fff2d8')
+      sun.current.position.set(sx, sy, sz)
+      sun.current.intensity = daylight * 5.2
+      sun.current.color.set(daylight < 0.5 ? '#ff9d68' : '#fff2d5')
     }
 
     if (moon.current) {
-      moon.current.position.set(-Math.cos(angle) * 35, -sunHeight * 42, -Math.sin(angle) * 30)
-      moon.current.intensity = (1 - daylight) * 0.55
+      moon.current.position.set(-sx, -sy, -sz)
+      moon.current.intensity = (1 - daylight) * 0.65
+    }
+
+    if (sunDisc.current) {
+      sunDisc.current.position.set(sx * 0.72, Math.max(-28, sy * 0.72), sz * 0.72)
+      sunDisc.current.visible = sunHeight > -0.18
+    }
+
+    if (moonDisc.current) {
+      moonDisc.current.position.set(-sx * 0.66, Math.max(-28, -sy * 0.66), -sz * 0.66)
+      moonDisc.current.visible = sunHeight < 0.18
     }
 
     if (hemi.current) {
-      hemi.current.intensity = 0.05 + daylight * 0.9
-      hemi.current.color.set(daylight > 0.3 ? '#b8d2ec' : '#34405d')
-      hemi.current.groundColor.set(daylight > 0.3 ? '#514833' : '#0b0d13')
+      hemi.current.intensity = 0.03 + daylight * 1.0
+      hemi.current.color.set(daylight > 0.3 ? '#c8ddf0' : '#2f3b59')
+      hemi.current.groundColor.set(daylight > 0.3 ? '#4e4631' : '#080a10')
     }
 
     if (ambient.current) {
-      ambient.current.intensity = 0.01 + daylight * 0.12
+      ambient.current.intensity = 0.005 + daylight * 0.11
     }
 
     sky.copy(night).lerp(day, daylight)
-    if (twilight > 0.02) sky.lerp(dusk, twilight * 0.35)
+    if (twilight > 0.02) sky.lerp(dusk, twilight * 0.42)
     scene.background = sky
-    scene.fog = new THREE.FogExp2(sky, 0.008 + (1 - daylight) * 0.014)
+    scene.fog = new THREE.FogExp2(sky, 0.007 + (1 - daylight) * 0.017)
   })
 
   return (
     <>
-      <ambientLight ref={ambient} intensity={0.05} color="#dce8f2" />
-      <hemisphereLight ref={hemi} args={['#b8d2ec', '#514833', 0.8]} />
-      <directionalLight ref={sun} intensity={3.5} position={[25, 35, 18]} color="#fff2d8" />
-      <directionalLight ref={moon} intensity={0.1} position={[-20, 22, -15]} color="#7e91c7" />
+      <ambientLight ref={ambient} intensity={0.04} color="#dce8f2" />
+      <hemisphereLight ref={hemi} args={['#c8ddf0', '#4e4631', 0.9]} />
+      <directionalLight ref={sun} intensity={4.5} position={[25, 35, 18]} color="#fff2d5" />
+      <directionalLight ref={moon} intensity={0.1} position={[-20, 22, -15]} color="#7d91cf" />
+
+      <mesh ref={sunDisc}>
+        <sphereGeometry args={[2.4, 12, 12]} />
+        <meshBasicMaterial color="#ffd77d" toneMapped={false} />
+      </mesh>
+      <mesh ref={moonDisc}>
+        <sphereGeometry args={[1.7, 12, 12]} />
+        <meshBasicMaterial color="#dbe5ff" toneMapped={false} />
+      </mesh>
     </>
   )
 }
@@ -722,6 +842,7 @@ export default function GameWorld() {
       <PlayerController />
       <DayNight />
       <Terrain />
+      <VillagePaths />
       <Pond />
       <Ruins />
       <HillMarker />
