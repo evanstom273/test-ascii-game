@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b1018"/>
+  <path d="M64 384 160 176l64 112 64-176 160 272H64Z" fill="#6f8f65"/>
+  <rect x="216" y="274" width="80" height="110" fill="#bd8a5d"/>
+  <rect x="239" y="316" width="34" height="68" fill="#171a1f"/>
+  <circle cx="364" cy="132" r="44" fill="#e8c778"/>
+  <text x="54" y="100" font-family="monospace" font-size="54" font-weight="700" fill="#f2f0e8">A3D</text>
+</svg>
