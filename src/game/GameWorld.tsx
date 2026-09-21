@@ -114,7 +114,7 @@ function getPixelTexture(
     for (let y = 0; y <= 128; y += 12) {
       ctx.beginPath()
       ctx.moveTo(0, y)
-      ctx.lineTo(64, y)
+      ctx.lineTo(128, y)
       ctx.stroke()
       const offset = ((y / 12) % 2) * 10
       for (let x = -offset; x < 128; x += 20) {
@@ -137,7 +137,7 @@ function getPixelTexture(
     for (let x = 4; x < 128; x += 8) {
       ctx.beginPath()
       ctx.moveTo(x, 0)
-      ctx.lineTo(x + Math.sin(x) * 2, 64)
+      ctx.lineTo(x + Math.sin(x) * 2, 128)
       ctx.stroke()
     }
   } else if (kind === 'gravel') {
@@ -287,6 +287,7 @@ function PlayerController() {
   const right = useMemo(() => new THREE.Vector3(), [])
   const focusTarget = useRef<THREE.Vector3 | null>(null)
   const interactionActive = useRef(false)
+  const normalFov = useRef(70)
 
   useEffect(() => {
     camera.rotation.order = 'YXZ'
@@ -335,6 +336,7 @@ function PlayerController() {
       const { x, y, z } = (event as CustomEvent<{ x: number; y: number; z: number }>).detail
       focusTarget.current = new THREE.Vector3(x, y, z)
       interactionActive.current = true
+      normalFov.current = (camera as THREE.PerspectiveCamera).fov
       controls.forward = false
       controls.back = false
       controls.left = false
@@ -381,6 +383,14 @@ function PlayerController() {
       const angleDelta = Math.atan2(Math.sin(targetYaw - yaw.current), Math.cos(targetYaw - yaw.current))
       yaw.current += angleDelta * Math.min(1, delta * 7)
       pitch.current = THREE.MathUtils.lerp(pitch.current, targetPitch, Math.min(1, delta * 7))
+    }
+
+    const perspectiveCamera = camera as THREE.PerspectiveCamera
+    const desiredFov = interactionActive.current ? 46 : normalFov.current
+    const nextFov = THREE.MathUtils.lerp(perspectiveCamera.fov, desiredFov, Math.min(1, delta * 6))
+    if (Math.abs(nextFov - perspectiveCamera.fov) > 0.01) {
+      perspectiveCamera.fov = nextFov
+      perspectiveCamera.updateProjectionMatrix()
     }
 
     camera.rotation.y = yaw.current
@@ -431,7 +441,7 @@ function isVillagePath(x: number, z: number) {
 
 function Terrain() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 72, 72)
+    const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 140, 140)
     geo.rotateX(-Math.PI / 2)
 
     const positions = geo.attributes.position
@@ -450,7 +460,8 @@ function Terrain() {
 
       const marshness = THREE.MathUtils.clamp(1 - Math.hypot(x - 31, z - 30) / 16, 0, 1)
       if (isVillagePath(x, z)) {
-        c.set('#756e60')
+        const pathNoise = seeded(Math.floor(x * 4) * 31 + Math.floor(z * 4) * 17)
+        c.set('#8a7658').lerp(new THREE.Color('#655641'), pathNoise * 0.35)
       } else if (marshness > 0.25) {
         c.copy(mid).lerp(marsh, marshness)
       } else if (y > 3.5) {
@@ -472,7 +483,7 @@ function Terrain() {
     <mesh geometry={geometry}>
       <meshStandardMaterial
         vertexColors
-        map={getPixelTexture('terrain-grass', '#78875f', '#4b593e', 'noise')}
+        map={getPixelTexture('terrain-grass-v2', '#9aa285', '#687357', 'noise')}
         roughness={1}
       />
     </mesh>
@@ -746,8 +757,10 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
     <sprite
       ref={sprite}
       position={[data.start[0], terrainHeight(data.start[0], data.start[1]) + 1.18, data.start[1]]}
-      scale={[1.45, 2.2, 1]}
+      scale={[1.65, 2.45, 1]}
       onPointerDown={beginDialogue}
+      onPointerOver={() => { document.body.style.cursor = 'pointer' }}
+      onPointerOut={() => { document.body.style.cursor = '' }}
     >
       <spriteMaterial map={texture} transparent alphaTest={0.18} depthWrite toneMapped={false} />
     </sprite>
@@ -822,63 +835,6 @@ function HillMarker() {
 }
 
 
-function PathStrip({
-  x,
-  z,
-  width,
-  depth,
-  tone,
-}: {
-  x: number
-  z: number
-  width: number
-  depth: number
-  tone: string
-}) {
-  const geometry = useMemo(() => {
-    const ws = Math.max(4, Math.ceil(width / 0.8))
-    const ds = Math.max(4, Math.ceil(depth / 0.8))
-    const geo = new THREE.PlaneGeometry(width, depth, ws, ds)
-    geo.rotateX(-Math.PI / 2)
-    const p = geo.attributes.position
-
-    for (let i = 0; i < p.count; i += 1) {
-      const lx = p.getX(i)
-      const lz = p.getZ(i)
-      p.setY(i, terrainHeight(x + lx, z + lz) + 0.11)
-    }
-
-    p.needsUpdate = true
-    geo.computeVertexNormals()
-    return geo
-  }, [x, z, width, depth])
-
-  useEffect(() => () => geometry.dispose(), [geometry])
-
-  return (
-    <mesh geometry={geometry} position={[x, 0, z]}>
-      <meshStandardMaterial
-        map={getPixelTexture('path-hires', '#887a61', '#5b5142', 'gravel')}
-        color={tone}
-        roughness={1}
-        polygonOffset
-        polygonOffsetFactor={-2}
-        polygonOffsetUnits={-4}
-      />
-    </mesh>
-  )
-}
-
-function VillagePaths() {
-  return (
-    <>
-      <PathStrip x={0} z={1} width={4.2} depth={36} tone="#82765f" />
-      <PathStrip x={-2.5} z={-5} width={24} depth={2.6} tone="#786d59" />
-      <PathStrip x={9} z={7} width={16} depth={2.2} tone="#766b57" />
-      <PathStrip x={-10} z={9} width={14} depth={2.1} tone="#746854" />
-    </>
-  )
-}
 
 function DayNight() {
   const sun = useRef<THREE.DirectionalLight>(null)
@@ -968,7 +924,6 @@ export default function GameWorld() {
       <PlayerController />
       <DayNight />
       <Terrain />
-      <VillagePaths />
       <Pond />
       <Ruins />
       <HillMarker />
