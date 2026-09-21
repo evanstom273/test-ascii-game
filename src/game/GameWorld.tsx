@@ -490,6 +490,54 @@ function HillMarker() {
   )
 }
 
+function TerrainPatch({
+  x,
+  z,
+  width,
+  depth,
+  color,
+  lift = 0.055,
+}: {
+  x: number
+  z: number
+  width: number
+  depth: number
+  color: string
+  lift?: number
+}) {
+  const geometry = useMemo(() => {
+    const widthSegments = Math.max(2, Math.ceil(width / 1.4))
+    const depthSegments = Math.max(2, Math.ceil(depth / 1.4))
+    const geo = new THREE.PlaneGeometry(width, depth, widthSegments, depthSegments)
+    geo.rotateX(-Math.PI / 2)
+
+    const positions = geo.attributes.position
+    for (let i = 0; i < positions.count; i += 1) {
+      const localX = positions.getX(i)
+      const localZ = positions.getZ(i)
+      positions.setY(i, terrainHeight(x + localX, z + localZ) + lift)
+    }
+
+    positions.needsUpdate = true
+    geo.computeVertexNormals()
+    return geo
+  }, [x, z, width, depth, lift])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return (
+    <mesh geometry={geometry} position={[x, 0, z]} receiveShadow>
+      <meshStandardMaterial
+        color={color}
+        roughness={1}
+        polygonOffset
+        polygonOffsetFactor={-1}
+        polygonOffsetUnits={-2}
+      />
+    </mesh>
+  )
+}
+
 function VillagePaths() {
   const pieces = [
     [0, 1, 4.2, 36],
@@ -501,10 +549,15 @@ function VillagePaths() {
   return (
     <>
       {pieces.map(([x, z, sx, sz], i) => (
-        <mesh key={i} rotation-x={-Math.PI / 2} position={[x, 0.035, z]} receiveShadow>
-          <planeGeometry args={[sx, sz]} />
-          <meshStandardMaterial color={i === 0 ? '#756e60' : '#6c665a'} roughness={1} />
-        </mesh>
+        <TerrainPatch
+          key={i}
+          x={x}
+          z={z}
+          width={sx}
+          depth={sz}
+          color={i === 0 ? '#756e60' : '#6c665a'}
+          lift={0.055 + i * 0.006}
+        />
       ))}
     </>
   )
