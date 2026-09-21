@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: white;
+  background: #05070c;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  touch-action: none;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+.game-button {
+  @apply flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-black/35 text-xl text-white shadow-lg backdrop-blur-sm select-none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.game-button:active {
+  @apply bg-white/20;
+}
