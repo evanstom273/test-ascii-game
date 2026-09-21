@@ -10,6 +10,12 @@ type Controls = {
   sprint: boolean
 }
 
+type BuildingData = {
+  position: readonly [number, number, number]
+  size: readonly [number, number, number]
+  color: string
+}
+
 const controls: Controls = {
   forward: false,
   back: false,
@@ -18,17 +24,57 @@ const controls: Controls = {
   sprint: false,
 }
 
-const buildings = [
-  { position: [-7, 1.5, -8] as const, size: [4, 3, 4] as const, color: '#815c42' },
-  { position: [5, 2, -10] as const, size: [5, 4, 4] as const, color: '#425b73' },
-  { position: [9, 1.25, 2] as const, size: [3.5, 2.5, 5] as const, color: '#6c493c' },
-  { position: [-10, 1.75, 5] as const, size: [5, 3.5, 3.5] as const, color: '#536548' },
+const PLAYER_RADIUS = 0.38
+const WORLD_LIMIT = 18.5
+const TREE_RADIUS = 0.72
+
+const buildings: BuildingData[] = [
+  { position: [-7, 1.5, -8], size: [4, 3, 4], color: '#815c42' },
+  { position: [5, 2, -10], size: [5, 4, 4], color: '#425b73' },
+  { position: [9, 1.25, 2], size: [3.5, 2.5, 5], color: '#6c493c' },
+  { position: [-10, 1.75, 5], size: [5, 3.5, 3.5], color: '#536548' },
 ]
 
 const treePositions = [
   [-3, -5], [1, -7], [8, -6], [-11, -3], [12, -2],
   [-6, 4], [3, 5], [7, 7], [-12, 9], [13, 10],
 ] as const
+
+function collidesWithWorld(x: number, z: number, radius = PLAYER_RADIUS) {
+  if (
+    x - radius < -WORLD_LIMIT ||
+    x + radius > WORLD_LIMIT ||
+    z - radius < -WORLD_LIMIT ||
+    z + radius > WORLD_LIMIT
+  ) {
+    return true
+  }
+
+  for (const [tx, tz] of treePositions) {
+    const dx = x - tx
+    const dz = z - tz
+    const minDistance = radius + TREE_RADIUS
+    if (dx * dx + dz * dz < minDistance * minDistance) return true
+  }
+
+  for (const building of buildings) {
+    const [bx, , bz] = building.position
+    const [sx, , sz] = building.size
+    const minX = bx - sx / 2 - radius
+    const maxX = bx + sx / 2 + radius
+    const minZ = bz - sz / 2 - radius
+    const maxZ = bz + sz / 2 + radius
+
+    if (x > minX && x < maxX && z > minZ && z < maxZ) return true
+  }
+
+  // Central plinth and lamp post.
+  if (x > -1.5 - radius && x < 1.5 + radius && z > -3.5 - radius && z < -0.5 + radius) {
+    return true
+  }
+
+  return false
+}
 
 function PlayerController() {
   const { camera, gl } = useThree()
@@ -105,7 +151,6 @@ function PlayerController() {
 
     forward.set(Math.sin(yaw.current), 0, Math.cos(yaw.current))
     right.set(Math.cos(yaw.current), 0, -Math.sin(yaw.current))
-
     velocity.current.set(0, 0, 0)
 
     if (moving) {
@@ -115,9 +160,16 @@ function PlayerController() {
         .normalize()
         .multiplyScalar((controls.sprint ? 8 : 4.5) * delta)
 
-      camera.position.add(velocity.current)
-      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -17, 17)
-      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -17, 17)
+      const nextX = camera.position.x + velocity.current.x
+      const nextZ = camera.position.z + velocity.current.z
+
+      // Resolve per axis so the player naturally slides along walls/trees.
+      if (!collidesWithWorld(nextX, camera.position.z)) {
+        camera.position.x = nextX
+      }
+      if (!collidesWithWorld(camera.position.x, nextZ)) {
+        camera.position.z = nextZ
+      }
     }
 
     camera.position.y = 1.65
@@ -141,26 +193,94 @@ function Tree({ x, z }: { x: number; z: number }) {
   )
 }
 
-function Building({
-  position,
-  size,
-  color,
-}: {
-  position: readonly [number, number, number]
-  size: readonly [number, number, number]
-  color: string
-}) {
+function Building({ position, size, color }: BuildingData) {
   return (
     <group>
       <mesh castShadow receiveShadow position={position}>
         <boxGeometry args={[...size]} />
         <meshStandardMaterial color={color} flatShading />
       </mesh>
-      <mesh
-        position={[position[0], position[1], position[2] + size[2] / 2 + 0.011]}
-      >
+      <mesh position={[position[0], position[1], position[2] + size[2] / 2 + 0.011]}>
         <planeGeometry args={[size[0] * 0.34, size[1] * 0.42]} />
         <meshBasicMaterial color="#f5c56f" toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function WanderingNpc() {
+  const root = useRef<THREE.Group>(null)
+  const leftArm = useRef<THREE.Mesh>(null)
+  const rightArm = useRef<THREE.Mesh>(null)
+  const leftLeg = useRef<THREE.Mesh>(null)
+  const rightLeg = useRef<THREE.Mesh>(null)
+
+  const heading = useRef(2.4)
+  const changeTimer = useRef(1.5)
+  const walkTime = useRef(0)
+
+  useFrame((_, delta) => {
+    const npc = root.current
+    if (!npc) return
+
+    changeTimer.current -= delta
+    if (changeTimer.current <= 0) {
+      heading.current += THREE.MathUtils.randFloatSpread(1.8)
+      changeTimer.current = THREE.MathUtils.randFloat(1.4, 3.8)
+    }
+
+    const speed = 1.25
+    const dx = Math.sin(heading.current) * speed * delta
+    const dz = Math.cos(heading.current) * speed * delta
+    const nx = npc.position.x + dx
+    const nz = npc.position.z + dz
+
+    if (!collidesWithWorld(nx, nz, 0.34)) {
+      npc.position.x = nx
+      npc.position.z = nz
+    } else {
+      heading.current += Math.PI * THREE.MathUtils.randFloat(0.55, 0.95)
+      changeTimer.current = 0.4
+    }
+
+    npc.rotation.y = heading.current + Math.PI
+    walkTime.current += delta * 7
+    const swing = Math.sin(walkTime.current) * 0.55
+
+    if (leftArm.current) leftArm.current.rotation.x = swing
+    if (rightArm.current) rightArm.current.rotation.x = -swing
+    if (leftLeg.current) leftLeg.current.rotation.x = -swing
+    if (rightLeg.current) rightLeg.current.rotation.x = swing
+  })
+
+  return (
+    <group ref={root} position={[5.5, 0, 5.5]}>
+      <mesh castShadow position={[0, 1.72, 0]}>
+        <boxGeometry args={[0.42, 0.42, 0.42]} />
+        <meshStandardMaterial color="#d7ad86" flatShading />
+      </mesh>
+
+      <mesh castShadow position={[0, 1.08, 0]}>
+        <boxGeometry args={[0.7, 0.85, 0.38]} />
+        <meshStandardMaterial color="#7e4fa3" flatShading />
+      </mesh>
+
+      <mesh ref={leftArm} castShadow position={[-0.45, 1.12, 0]}>
+        <boxGeometry args={[0.18, 0.78, 0.18]} />
+        <meshStandardMaterial color="#d7ad86" flatShading />
+      </mesh>
+      <mesh ref={rightArm} castShadow position={[0.45, 1.12, 0]}>
+        <boxGeometry args={[0.18, 0.78, 0.18]} />
+        <meshStandardMaterial color="#d7ad86" flatShading />
+      </mesh>
+
+      <mesh ref={leftLeg} castShadow position={[-0.19, 0.42, 0]}>
+        <boxGeometry args={[0.22, 0.78, 0.25]} />
+        <meshStandardMaterial color="#2b3340" flatShading />
+      </mesh>
+      <mesh ref={rightLeg} castShadow position={[0.19, 0.42, 0]}>
+        <boxGeometry args={[0.22, 0.78, 0.25]} />
+        <meshStandardMaterial color="#2b3340" flatShading />
       </mesh>
     </group>
   )
@@ -170,6 +290,9 @@ function DayNight() {
   const sun = useRef<THREE.DirectionalLight>(null)
   const { scene } = useThree()
   const clock = useRef(0.18)
+  const night = useMemo(() => new THREE.Color('#050711'), [])
+  const day = useMemo(() => new THREE.Color('#78a8d5'), [])
+  const sky = useMemo(() => new THREE.Color(), [])
 
   useFrame((_, delta) => {
     clock.current = (clock.current + delta * 0.012) % 1
@@ -179,14 +302,13 @@ function DayNight() {
 
     if (sun.current) {
       sun.current.position.set(Math.cos(angle) * 22, height * 24, Math.sin(angle) * 15)
-      sun.current.intensity = 0.25 + daylight * 2.0
+      sun.current.intensity = 0.25 + daylight * 2
       sun.current.color.set(daylight > 0.45 ? '#fff1cf' : '#ff9b70')
     }
 
-    const night = new THREE.Color('#050711')
-    const day = new THREE.Color('#78a8d5')
-    scene.background = night.clone().lerp(day, daylight)
-    scene.fog = new THREE.Fog(scene.background, 14, 52)
+    sky.copy(night).lerp(day, daylight)
+    scene.background = sky
+    scene.fog = new THREE.Fog(sky, 14, 52)
   })
 
   return (
@@ -209,6 +331,7 @@ export default function GameWorld() {
     <>
       <PlayerController />
       <DayNight />
+      <WanderingNpc />
 
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[40, 40, 40, 40]} />
