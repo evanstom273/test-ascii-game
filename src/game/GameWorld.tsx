@@ -15,6 +15,7 @@ type BuildingData = {
   size: readonly [number, number, number]
   color: string
   roof: string
+  rotation: number
 }
 
 type NpcData = {
@@ -67,21 +68,50 @@ function terrainHeight(x: number, z: number) {
 }
 
 const buildings: BuildingData[] = [
-  { position: [-7, -8], size: [4, 3, 4], color: '#876147', roof: '#44352f' },
-  { position: [5, -10], size: [5, 4, 4], color: '#536879', roof: '#343943' },
-  { position: [9, 2], size: [3.5, 2.5, 5], color: '#765044', roof: '#3e322e' },
-  { position: [-10, 5], size: [5, 3.5, 3.5], color: '#667358', roof: '#343d2f' },
-  { position: [14, -9], size: [4, 3, 4.5], color: '#79624d', roof: '#40332d' },
-  { position: [-15, -8], size: [4.5, 3.2, 4], color: '#5f6d76', roof: '#343b40' },
-  { position: [15, 10], size: [4.2, 3.2, 4.2], color: '#80604b', roof: '#44352f' },
-  { position: [-13, 14], size: [4.8, 3.7, 4.2], color: '#666f52', roof: '#343b30' },
-  { position: [38, -31], size: [5, 4.5, 5], color: '#635b55', roof: '#35312f' },
-  { position: [-42, 24], size: [5.5, 3.5, 4.5], color: '#756a5e', roof: '#3b3530' },
+  { position: [-7, -8], size: [4, 3, 4], color: '#876147', roof: '#44352f', rotation: 0 },
+  { position: [5, -10], size: [5, 4, 4], color: '#536879', roof: '#343943', rotation: Math.PI },
+  { position: [9, 2], size: [3.5, 2.5, 5], color: '#765044', roof: '#3e322e', rotation: -Math.PI / 2 },
+  { position: [-10, 5], size: [5, 3.5, 3.5], color: '#667358', roof: '#343d2f', rotation: Math.PI / 2 },
+  { position: [14, -9], size: [4, 3, 4.5], color: '#79624d', roof: '#40332d', rotation: Math.PI },
+  { position: [-15, -8], size: [4.5, 3.2, 4], color: '#5f6d76', roof: '#343b40', rotation: Math.PI / 2 },
+  { position: [15, 10], size: [4.2, 3.2, 4.2], color: '#80604b', roof: '#44352f', rotation: -Math.PI / 2 },
+  { position: [-13, 14], size: [4.8, 3.7, 4.2], color: '#666f52', roof: '#343b30', rotation: Math.PI },
+  { position: [38, -31], size: [5, 4.5, 5], color: '#635b55', roof: '#35312f', rotation: Math.PI / 2 },
+  { position: [-42, 24], size: [5.5, 3.5, 4.5], color: '#756a5e', roof: '#3b3530', rotation: -Math.PI / 2 },
 ]
 
 function seeded(seed: number) {
   const n = Math.sin(seed * 12.9898) * 43758.5453
   return n - Math.floor(n)
+}
+
+
+function buildingFootprint(building: BuildingData) {
+  const quarterTurn = Math.abs(Math.sin(building.rotation)) > 0.5
+  const width = quarterTurn ? building.size[2] : building.size[0]
+  const depth = quarterTurn ? building.size[0] : building.size[2]
+  return { width, depth }
+}
+
+function isNearBuilding(x: number, z: number, padding = 0.8) {
+  return buildings.some((building) => {
+    const { width, depth } = buildingFootprint(building)
+    return (
+      Math.abs(x - building.position[0]) <= width / 2 + padding &&
+      Math.abs(z - building.position[1]) <= depth / 2 + padding
+    )
+  })
+}
+
+function fenceHitsBuilding(x: number, z: number, length: number, rotation: number) {
+  const samples = Math.max(4, Math.ceil(length / 0.6))
+  for (let i = 0; i <= samples; i += 1) {
+    const t = -length / 2 + (length * i) / samples
+    const sx = x + Math.cos(rotation) * t
+    const sz = z - Math.sin(rotation) * t
+    if (isNearBuilding(sx, sz, 0.55)) return true
+  }
+  return false
 }
 
 
@@ -192,7 +222,7 @@ for (let i = 0; i < 120; i += 1) {
   const z = -54 + seeded(i + 90) * 108
   if (Math.hypot(x, z) < 18) continue
   if (Math.hypot(x - 31, z - 30) < 9) continue
-  if (buildings.some((b) => Math.abs(x - b.position[0]) < 4 && Math.abs(z - b.position[1]) < 4)) continue
+  if (isNearBuilding(x, z, 2.2)) continue
   treePositions.push([x, z])
 }
 
@@ -274,12 +304,12 @@ function collidesWithWorld(x: number, z: number, radius = PLAYER_RADIUS) {
 
   for (const building of buildings) {
     const [bx, bz] = building.position
-    const [sx, , sz] = building.size
+    const { width, depth } = buildingFootprint(building)
     if (
-      x > bx - sx / 2 - radius &&
-      x < bx + sx / 2 + radius &&
-      z > bz - sz / 2 - radius &&
-      z < bz + sz / 2 + radius
+      x > bx - width / 2 - radius &&
+      x < bx + width / 2 + radius &&
+      z > bz - depth / 2 - radius &&
+      z < bz + depth / 2 + radius
     ) return true
   }
 
@@ -538,11 +568,10 @@ function Tree({ x, z }: { x: number; z: number }) {
   )
 }
 
-function Building({ position, size, color, roof }: BuildingData) {
+function Building({ position, size, color, roof, rotation }: BuildingData) {
   const [x, z] = position
   const [sx, sy, sz] = size
   const ground = terrainHeight(x, z)
-  const y = ground + sy / 2
   const variant = Math.abs(Math.round(x * 3 + z * 5)) % 4
   const hasPorch = variant !== 1
   const hasAnnex = variant === 2 || variant === 3
@@ -556,7 +585,9 @@ function Building({ position, size, color, roof }: BuildingData) {
   const roofAngle = 0.52 + variant * 0.025
   const roofPanelWidth = sx * 0.64
   const roofRise = Math.tan(roofAngle) * (sx / 2)
-  const roofY = ground + sy + roofRise * 0.48
+  const roofY = sy + roofRise * 0.48
+  const beamColor = variant % 2 === 0 ? '#3d291f' : '#493225'
+  const stoneColor = variant === 1 ? '#77756c' : '#68645b'
 
   const gableGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry()
@@ -568,14 +599,7 @@ function Building({ position, size, color, roof }: BuildingData) {
          0, roofRise, 0,
       ], 3),
     )
-    geometry.setAttribute(
-      'uv',
-      new THREE.Float32BufferAttribute([
-        0, 0,
-        1, 0,
-        0.5, 1,
-      ], 2),
-    )
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2))
     geometry.setIndex([0, 1, 2])
     geometry.computeVertexNormals()
     return geometry
@@ -588,11 +612,9 @@ function Building({ position, size, color, roof }: BuildingData) {
     return texture
   }, [wallTexture, roofRise, sy])
 
-  useEffect(() => {
-    return () => {
-      gableGeometry.dispose()
-      gableTexture.dispose()
-    }
+  useEffect(() => () => {
+    gableGeometry.dispose()
+    gableTexture.dispose()
   }, [gableGeometry, gableTexture])
 
   const leftWindow = useRef<THREE.MeshStandardMaterial>(null)
@@ -604,51 +626,43 @@ function Building({ position, size, color, roof }: BuildingData) {
     if (rightWindow.current) rightWindow.current.emissiveIntensity = glow
   })
 
-  const beamColor = variant % 2 === 0 ? '#3d291f' : '#493225'
-  const stoneColor = variant === 1 ? '#77756c' : '#68645b'
-
   return (
-    <group>
-      <mesh position={[x, ground + 0.18, z]}>
+    <group position={[x, ground, z]} rotation-y={rotation}>
+      <mesh position={[0, 0.18, 0]}>
         <boxGeometry args={[sx + 0.34, 0.36, sz + 0.34]} />
         <meshStandardMaterial color={stoneColor} roughness={1} />
       </mesh>
 
-      <mesh position={[x, y, z]}>
+      <mesh position={[0, sy / 2, 0]}>
         <boxGeometry args={[sx, sy, sz]} />
         <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} />
       </mesh>
 
-      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z + sz / 2 + 0.008]}>
+      <mesh geometry={gableGeometry} position={[0, sy + 0.002, sz / 2 + 0.008]}>
         <meshStandardMaterial map={gableTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
-      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z - sz / 2 - 0.008]} rotation-y={Math.PI}>
+      <mesh geometry={gableGeometry} position={[0, sy + 0.002, -sz / 2 - 0.008]} rotation-y={Math.PI}>
         <meshStandardMaterial map={gableTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
 
-      <mesh position={[x - sx * 0.24, roofY, z]} rotation={[0, 0, roofAngle]}>
+      <mesh position={[-sx * 0.24, roofY, 0]} rotation={[0, 0, roofAngle]}>
         <boxGeometry args={[roofPanelWidth, 0.2, sz * 1.18]} />
         <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
       </mesh>
-      <mesh position={[x + sx * 0.24, roofY, z]} rotation={[0, 0, -roofAngle]}>
+      <mesh position={[sx * 0.24, roofY, 0]} rotation={[0, 0, -roofAngle]}>
         <boxGeometry args={[roofPanelWidth, 0.2, sz * 1.18]} />
         <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
       </mesh>
-
-      <mesh position={[x, ground + sy + roofRise + 0.02, z]}>
+      <mesh position={[0, sy + roofRise + 0.02, 0]}>
         <boxGeometry args={[0.16, 0.16, sz * 1.2]} />
         <meshStandardMaterial color="#271d18" roughness={1} />
       </mesh>
 
       {hasChimney && (
-        <group position={[x + sx * 0.28, ground + sy + roofRise * 0.65, z - sz * 0.16]}>
+        <group position={[sx * 0.28, sy + roofRise * 0.65, -sz * 0.16]}>
           <mesh>
             <boxGeometry args={[0.5, 1.7, 0.5]} />
-            <meshStandardMaterial
-              map={getPixelTexture('chimney-stone', '#69645d', '#403d38', 'brick')}
-              color="#b0aaa1"
-              roughness={1}
-            />
+            <meshStandardMaterial map={getPixelTexture('chimney-stone', '#69645d', '#403d38', 'brick')} color="#b0aaa1" roughness={1} />
           </mesh>
           <mesh position={[0, 0.92, 0]}>
             <boxGeometry args={[0.62, 0.14, 0.62]} />
@@ -657,17 +671,17 @@ function Building({ position, size, color, roof }: BuildingData) {
         </group>
       )}
 
-      <mesh position={[x, ground + 1.02, z + sz / 2 + 0.09]}>
+      <mesh position={[0, 1.02, sz / 2 + 0.09]}>
         <boxGeometry args={[0.92, 1.92, 0.14]} />
         <meshStandardMaterial map={woodTexture} color="#543728" roughness={1} />
       </mesh>
-      <mesh position={[x + 0.28, ground + 1.03, z + sz / 2 + 0.18]}>
+      <mesh position={[0.28, 1.03, sz / 2 + 0.18]}>
         <sphereGeometry args={[0.055, 8, 8]} />
         <meshStandardMaterial color="#b38a50" metalness={0.3} roughness={0.55} />
       </mesh>
 
       {[-0.3, 0.3].map((offset, i) => (
-        <group key={offset} position={[x + sx * offset, ground + sy * 0.58, z + sz / 2 + 0.09]}>
+        <group key={offset} position={[sx * offset, sy * 0.58, sz / 2 + 0.09]}>
           <mesh>
             <boxGeometry args={[0.98, 1.12, 0.14]} />
             <meshStandardMaterial map={woodTexture} color="#4b3327" roughness={1} />
@@ -690,35 +704,35 @@ function Building({ position, size, color, roof }: BuildingData) {
             <boxGeometry args={[0.72, 0.055, 0.026]} />
             <meshStandardMaterial color="#402b22" roughness={0.9} />
           </mesh>
-          {variant === 3 && (
-            <>
-              <mesh position={[-0.5, 0, 0.04]} rotation-y={0.14}>
-                <boxGeometry args={[0.08, 1.04, 0.08]} />
-                <meshStandardMaterial color={beamColor} roughness={1} />
-              </mesh>
-              <mesh position={[0.5, 0, 0.04]} rotation-y={-0.14}>
-                <boxGeometry args={[0.08, 1.04, 0.08]} />
-                <meshStandardMaterial color={beamColor} roughness={1} />
-              </mesh>
-            </>
-          )}
         </group>
       ))}
 
       {[-0.4, 0, 0.4].map((offset) => (
-        <mesh key={offset} position={[x + sx * offset, ground + sy * 0.5, z + sz / 2 + 0.07]}>
+        <mesh key={offset} position={[sx * offset, sy * 0.5, sz / 2 + 0.07]}>
           <boxGeometry args={[0.12, sy * 0.92, 0.12]} />
           <meshStandardMaterial map={woodTexture} color={beamColor} roughness={1} />
         </mesh>
       ))}
-
-      <mesh position={[x, ground + sy * 0.72, z + sz / 2 + 0.07]}>
+      <mesh position={[0, sy * 0.72, sz / 2 + 0.07]}>
         <boxGeometry args={[sx * 0.92, 0.12, 0.12]} />
         <meshStandardMaterial map={woodTexture} color={beamColor} roughness={1} />
       </mesh>
 
+      {variant === 3 && (
+        <>
+          <mesh position={[0, sy * 0.39, sz / 2 + 0.12]} rotation-z={0.58}>
+            <boxGeometry args={[sx * 1.02, 0.1, 0.1]} />
+            <meshStandardMaterial color={beamColor} roughness={1} />
+          </mesh>
+          <mesh position={[0, sy * 0.39, sz / 2 + 0.13]} rotation-z={-0.58}>
+            <boxGeometry args={[sx * 1.02, 0.1, 0.1]} />
+            <meshStandardMaterial color={beamColor} roughness={1} />
+          </mesh>
+        </>
+      )}
+
       {hasPorch && (
-        <group position={[x, ground, z + sz / 2 + 0.76]}>
+        <group position={[0, 0, sz / 2 + 0.76]}>
           <mesh position={[0, 0.12, 0]}>
             <boxGeometry args={[Math.min(2.5, sx * 0.64), 0.24, 1.2]} />
             <meshStandardMaterial map={woodTexture} color="#6a4935" roughness={1} />
@@ -738,30 +752,17 @@ function Building({ position, size, color, roof }: BuildingData) {
         </group>
       )}
 
-      {variant === 0 && (
-        <>
-          <mesh position={[x - sx * 0.31, ground + 0.62, z + sz / 2 + 0.13]}>
-            <boxGeometry args={[0.62, 0.78, 0.2]} />
-            <meshStandardMaterial color="#69645c" roughness={1} />
-          </mesh>
-          <mesh position={[x + sx * 0.31, ground + 0.62, z + sz / 2 + 0.13]}>
-            <boxGeometry args={[0.62, 0.78, 0.2]} />
-            <meshStandardMaterial color="#69645c" roughness={1} />
-          </mesh>
-        </>
-      )}
-
       {variant === 1 && (
-        <group position={[x, ground + sy + roofRise * 0.55, z + sz * 0.08]}>
+        <group position={[0, sy + roofRise * 0.55, sz * 0.08]}>
           <mesh position={[0, 0, 0.2]}>
             <boxGeometry args={[1.2, 0.9, 0.78]} />
             <meshStandardMaterial map={wallTexture} color="#f2efe5" roughness={1} />
           </mesh>
-          <mesh position={[0, 0.56, 0.2]} rotation-z={0.38}>
+          <mesh position={[-0.38, 0.56, 0.2]} rotation-z={0.38}>
             <boxGeometry args={[0.82, 0.12, 0.96]} />
             <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
           </mesh>
-          <mesh position={[0.42, 0.56, 0.2]} rotation-z={-0.38}>
+          <mesh position={[0.38, 0.56, 0.2]} rotation-z={-0.38}>
             <boxGeometry args={[0.82, 0.12, 0.96]} />
             <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
           </mesh>
@@ -773,7 +774,7 @@ function Building({ position, size, color, roof }: BuildingData) {
       )}
 
       {variant === 2 && (
-        <group position={[x - sx * 0.33, ground + 0.7, z + sz / 2 + 0.25]}>
+        <group position={[-sx * 0.33, 0.7, sz / 2 + 0.25]}>
           <mesh position={[0, 0.22, 0]}>
             <boxGeometry args={[0.9, 1.4, 0.38]} />
             <meshStandardMaterial map={getPixelTexture('house-stone-course', '#767168', '#4b4842', 'brick')} color="#aaa49a" roughness={1} />
@@ -785,21 +786,8 @@ function Building({ position, size, color, roof }: BuildingData) {
         </group>
       )}
 
-      {variant === 3 && (
-        <>
-          <mesh position={[x, ground + sy * 0.39, z + sz / 2 + 0.12]} rotation-z={0.58}>
-            <boxGeometry args={[sx * 1.02, 0.1, 0.1]} />
-            <meshStandardMaterial color={beamColor} roughness={1} />
-          </mesh>
-          <mesh position={[x, ground + sy * 0.39, z + sz / 2 + 0.13]} rotation-z={-0.58}>
-            <boxGeometry args={[sx * 1.02, 0.1, 0.1]} />
-            <meshStandardMaterial color={beamColor} roughness={1} />
-          </mesh>
-        </>
-      )}
-
       {hasAnnex && (
-        <group position={[x + sx / 2 + 1.0, ground, z + sz * 0.1]}>
+        <group position={[sx / 2 + 1.0, 0, sz * 0.1]}>
           <mesh position={[0, 1.05, 0]}>
             <boxGeometry args={[2.0, 2.1, Math.max(2.1, sz * 0.72)]} />
             <meshStandardMaterial map={wallTexture} color="#f0eee7" roughness={1} />
@@ -1104,7 +1092,7 @@ function GrassField() {
 
       if (isVillagePath(x, z)) continue
       if (Math.hypot(x - 31, z - 30) < 8.5) continue
-      if (buildings.some((b) => Math.abs(x - b.position[0]) < b.size[0] * 0.72 && Math.abs(z - b.position[1]) < b.size[2] * 0.72)) continue
+      if (isNearBuilding(x, z, 1.25)) continue
 
       const y = terrainHeight(x, z)
       const distanceFromVillage = Math.hypot(x, z)
@@ -1177,7 +1165,7 @@ function ReedsAndFlowers() {
         const z = -24 + seeded(i + 4200) * 48
         i += 1
         if (isVillagePath(x, z)) continue
-        if (buildings.some((b) => Math.abs(x - b.position[0]) < b.size[0] * 0.8 && Math.abs(z - b.position[1]) < b.size[2] * 0.8)) continue
+        if (isNearBuilding(x, z, 1.35)) continue
         const y = terrainHeight(x, z)
         dummy.position.set(x, y + 0.2, z)
         dummy.rotation.set(0, seeded(i + 4300) * Math.PI * 2, 0)
@@ -1210,6 +1198,7 @@ function ReedsAndFlowers() {
 
 
 function Crate({ x, z, rotation = 0 }: { x: number; z: number; rotation?: number }) {
+  if (isNearBuilding(x, z, 0.65)) return null
   const y = terrainHeight(x, z)
   const wood = getPixelTexture('crate-wood', '#6b4933', '#2f2018', 'wood')
   return (
@@ -1231,6 +1220,7 @@ function Crate({ x, z, rotation = 0 }: { x: number; z: number; rotation?: number
 }
 
 function Barrel({ x, z }: { x: number; z: number }) {
+  if (isNearBuilding(x, z, 0.65)) return null
   const y = terrainHeight(x, z)
   return (
     <group position={[x, y, z]}>
@@ -1253,6 +1243,7 @@ function Barrel({ x, z }: { x: number; z: number }) {
 }
 
 function Bench({ x, z, rotation = 0 }: { x: number; z: number; rotation?: number }) {
+  if (isNearBuilding(x, z, 1.2)) return null
   const y = terrainHeight(x, z)
   return (
     <group position={[x, y, z]} rotation-y={rotation}>
@@ -1330,6 +1321,7 @@ function Signpost() {
 }
 
 function Fence({ x, z, length = 5, rotation = 0 }: { x: number; z: number; length?: number; rotation?: number }) {
+  if (fenceHitsBuilding(x, z, length, rotation)) return null
   const y = terrainHeight(x, z)
   const posts = Math.max(2, Math.round(length / 1.2))
   return (
@@ -1356,8 +1348,9 @@ function Fence({ x, z, length = 5, rotation = 0 }: { x: number; z: number; lengt
 }
 
 function HandCart() {
-  const x = 7.3
-  const z = -3.8
+  const x = 6.8
+  const z = 5.7
+  if (isNearBuilding(x, z, 1.1)) return null
   const y = terrainHeight(x, z)
   return (
     <group position={[x, y, z]} rotation-y={-0.35}>
@@ -1380,6 +1373,7 @@ function HandCart() {
 }
 
 function LanternPost({ x, z }: { x: number; z: number }) {
+  if (isNearBuilding(x, z, 0.8)) return null
   const y = terrainHeight(x, z)
   const light = useRef<THREE.PointLight>(null)
   useFrame(() => {
@@ -1436,21 +1430,21 @@ function VillageProps() {
     <>
       <Well />
       <Signpost />
-      <Bench x={-4.8} z={1.6} rotation={0.25} />
-      <Bench x={5.1} z={0.8} rotation={-0.35} />
-      <Crate x={-6.1} z={-5.8} rotation={0.2} />
-      <Crate x={-5.45} z={-5.65} rotation={-0.15} />
-      <Crate x={12.2} z={-6.2} rotation={0.5} />
-      <Barrel x={-8.7} z={6.8} />
-      <Barrel x={-8.15} z={6.5} />
-      <Barrel x={13.4} z={7.2} />
-      <Fence x={-13.5} z={10.8} length={6.5} rotation={0.08} />
-      <Fence x={11.5} z={11.4} length={5.4} rotation={-0.12} />
-      <Fence x={-12} z={-11.5} length={5.2} rotation={0.18} />
+      <Bench x={-3.9} z={2.2} rotation={0.15} />
+      <Bench x={4.2} z={1.8} rotation={-0.25} />
+      <Crate x={-3.8} z={-7.0} rotation={0.2} />
+      <Crate x={-3.15} z={-6.7} rotation={-0.15} />
+      <Crate x={10.8} z={-7.2} rotation={0.5} />
+      <Barrel x={-6.5} z={3.7} />
+      <Barrel x={-5.9} z={3.4} />
+      <Barrel x={11.5} z={5.2} />
+      <Fence x={-17.5} z={11.0} length={5.0} rotation={0.0} />
+      <Fence x={18.5} z={8.3} length={4.8} rotation={Math.PI / 2} />
+      <Fence x={-11.5} z={-13.2} length={5.0} rotation={0.0} />
       <HandCart />
-      <LanternPost x={-3.2} z={-1.0} />
-      <LanternPost x={4.2} z={4.8} />
-      <LanternPost x={-7.0} z={7.4} />
+      <LanternPost x={-2.8} z={-1.2} />
+      <LanternPost x={3.0} z={3.2} />
+      <LanternPost x={-5.0} z={7.0} />
     </>
   )
 }
