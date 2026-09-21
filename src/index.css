@@ -7,9 +7,7 @@
   font-synthesis: none;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html,
 body,
@@ -21,9 +19,7 @@ body,
   overscroll-behavior: none;
 }
 
-body {
-  touch-action: none;
-}
+body { touch-action: none; }
 
 canvas {
   display: block;
@@ -35,6 +31,10 @@ canvas {
   -webkit-tap-highlight-color: transparent;
 }
 
-.game-button:active {
-  @apply bg-white/20;
+.game-button:active { @apply bg-white/20; }
+
+.touch-controls { display: none; }
+
+@media (pointer: coarse), (any-pointer: coarse) {
+  .touch-controls { display: grid; }
 }
