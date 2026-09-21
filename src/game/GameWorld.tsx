@@ -161,6 +161,18 @@ function getPixelTexture(
     }
   }
 
+  // Shared weathering pass: tiny value shifts keep surfaces from reading as flat procedural fills.
+  ctx.globalAlpha = 0.16
+  for (let i = 0; i < 220; i += 1) {
+    const x = Math.floor(random(i + 7000) * 128)
+    const y = Math.floor(random(i + 7600) * 128)
+    const light = random(i + 8100) > 0.52
+    ctx.fillStyle = light ? '#ffffff' : '#000000'
+    const size = random(i + 8500) > 0.88 ? 2 : 1
+    ctx.fillRect(x, y, size, size)
+  }
+  ctx.globalAlpha = 1
+
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.magFilter = THREE.NearestFilter
@@ -1463,11 +1475,47 @@ function Rock({ x, z, index }: { x: number; z: number; index: number }) {
 function Pond() {
   const x = 31
   const z = 30
+  const bankY = terrainHeight(x, z)
+
   return (
-    <mesh rotation-x={-Math.PI / 2} position={[x, -1.45, z]}>
-      <circleGeometry args={[7.4, 32]} />
-      <meshStandardMaterial color="#405f66" transparent opacity={0.82} roughness={0.25} metalness={0.05} />
-    </mesh>
+    <group>
+      <mesh rotation-x={-Math.PI / 2} position={[x, -1.45, z]}>
+        <circleGeometry args={[7.4, 40]} />
+        <meshStandardMaterial color="#405f66" transparent opacity={0.84} roughness={0.2} metalness={0.08} />
+      </mesh>
+
+      {Array.from({ length: 18 }, (_, i) => {
+        const a = (i / 18) * Math.PI * 2
+        const radius = 7.1 + (i % 3) * 0.24
+        const rx = x + Math.cos(a) * radius
+        const rz = z + Math.sin(a) * radius
+        return (
+          <mesh key={i} position={[rx, terrainHeight(rx, rz) + 0.16, rz]} rotation={[0.12, a, -0.08]}>
+            <dodecahedronGeometry args={[0.28 + (i % 4) * 0.045, 0]} />
+            <meshStandardMaterial color={i % 2 ? '#696d63' : '#77796f'} roughness={1} flatShading />
+          </mesh>
+        )
+      })}
+
+      <group position={[x - 1.2, bankY + 0.28, z - 0.5]} rotation-y={0.2}>
+        {[-1.5, -0.75, 0, 0.75, 1.5].map((offset) => (
+          <mesh key={offset} position={[offset, 0, 0]}>
+            <boxGeometry args={[0.62, 0.16, 2.4]} />
+            <meshStandardMaterial
+              map={getPixelTexture('bridge-plank', '#72513a', '#33231a', 'wood')}
+              color="#8b674c"
+              roughness={1}
+            />
+          </mesh>
+        ))}
+        {[-1.8, 1.8].map((offset) => (
+          <mesh key={offset} position={[offset, 0.35, 0]}>
+            <boxGeometry args={[0.12, 0.7, 2.6]} />
+            <meshStandardMaterial color="#493326" roughness={1} />
+          </mesh>
+        ))}
+      </group>
+    </group>
   )
 }
 
@@ -1475,18 +1523,54 @@ function Ruins() {
   const x = -42
   const z = 28
   const y = terrainHeight(x, z)
+  const stone = getPixelTexture('ruin-stone', '#77756d', '#4c4a45', 'noise')
+
   return (
     <group position={[x, y, z]}>
-      {[-3, 0, 3].map((offset, i) => (
-        <mesh key={offset} position={[offset, 1.4 + i * 0.18, 0]}>
-          <cylinderGeometry args={[0.42, 0.52, 2.8 + i * 0.36, 7]} />
-          <meshStandardMaterial color="#77756d" flatShading roughness={1} />
+      {[-3.2, 0, 3.1].map((offset, i) => (
+        <mesh key={offset} position={[offset, 1.3 + i * 0.12, 0]} rotation-z={i === 0 ? -0.06 : i === 2 ? 0.08 : 0}>
+          <cylinderGeometry args={[0.42, 0.56, 2.6 + i * 0.35, 7]} />
+          <meshStandardMaterial map={stone} color="#aaa69c" flatShading roughness={1} />
         </mesh>
       ))}
-      <mesh position={[0, 0.35, -2.8]}>
-        <boxGeometry args={[7.5, 0.7, 1]} />
-        <meshStandardMaterial color="#68665f" roughness={1} flatShading />
+
+      <mesh position={[-1.6, 2.75, 0]}>
+        <boxGeometry args={[2.7, 0.48, 0.72]} />
+        <meshStandardMaterial map={stone} color="#9b988f" roughness={1} />
       </mesh>
+      <mesh position={[1.65, 2.35, 0]} rotation-z={-0.11}>
+        <boxGeometry args={[2.4, 0.42, 0.7]} />
+        <meshStandardMaterial map={stone} color="#8f8c84" roughness={1} />
+      </mesh>
+
+      <mesh position={[0, 0.34, -2.8]} rotation-y={0.05}>
+        <boxGeometry args={[7.5, 0.68, 1]} />
+        <meshStandardMaterial map={stone} color="#89867d" roughness={1} flatShading />
+      </mesh>
+
+      {[
+        [-2.8, 0.25, -1.7, 0.2],
+        [2.4, 0.3, -2.0, -0.45],
+        [0.8, 0.2, 1.7, 0.7],
+        [-0.9, 0.18, 2.1, -0.3],
+      ].map(([rx, ry, rz, rot], i) => (
+        <mesh key={i} position={[rx, ry, rz]} rotation={[0.2, rot, 0.12]}>
+          <boxGeometry args={[1.15, 0.42, 0.6]} />
+          <meshStandardMaterial map={stone} color="#817e76" roughness={1} />
+        </mesh>
+      ))}
+
+      <group position={[0.3, 0.05, 1.0]}>
+        <mesh position={[0, 0.22, 0]}>
+          <cylinderGeometry args={[0.55, 0.7, 0.38, 9]} />
+          <meshStandardMaterial color="#41372f" roughness={1} />
+        </mesh>
+        <pointLight position={[0, 0.75, 0]} color="#ff9b4d" intensity={5} distance={5} decay={2} />
+        <mesh position={[0, 0.58, 0]}>
+          <coneGeometry args={[0.22, 0.7, 7]} />
+          <meshBasicMaterial color="#ef8a37" transparent opacity={0.72} toneMapped={false} />
+        </mesh>
+      </group>
     </group>
   )
 }
