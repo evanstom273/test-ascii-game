@@ -377,8 +377,10 @@ function PlayerController() {
       const dy = focusTarget.current.y - camera.position.y
       const dz = focusTarget.current.z - camera.position.z
       const horizontal = Math.hypot(dx, dz)
-      const targetYaw = Math.atan2(dx, dz)
-      const targetPitch = -Math.atan2(dy, Math.max(0.001, horizontal))
+      // Three.js cameras look down local -Z, so target yaw/pitch must be
+      // calculated against -Z rather than +Z.
+      const targetYaw = Math.atan2(-dx, -dz)
+      const targetPitch = Math.atan2(dy, Math.max(0.001, horizontal))
 
       const angleDelta = Math.atan2(Math.sin(targetYaw - yaw.current), Math.cos(targetYaw - yaw.current))
       yaw.current += angleDelta * Math.min(1, delta * 7)
