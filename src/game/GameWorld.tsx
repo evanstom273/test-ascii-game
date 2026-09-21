@@ -536,8 +536,10 @@ function Building({ position, size, color, roof }: BuildingData) {
   const hasAnnex = variant === 2 || variant === 3
   const hasChimney = variant !== 0
 
-  const wallTexture = getPixelTexture(`wall-${color}`, color, '#3e3832', 'brick')
-  const roofTexture = getPixelTexture(`roof-${roof}`, roof, '#1f1d1c', 'roof')
+  const wallKind: 'noise' | 'brick' = variant === 0 || variant === 3 ? 'brick' : 'noise'
+  const wallAccent = variant === 1 ? '#4e514b' : variant === 2 ? '#695746' : '#3e3832'
+  const wallTexture = getPixelTexture(`wall-v${variant}-${color}`, color, wallAccent, wallKind)
+  const roofTexture = getPixelTexture(`roof-v${variant}-${roof}`, roof, variant === 2 ? '#35271f' : '#1f1d1c', 'roof')
   const woodTexture = getPixelTexture('building-wood', '#4d3426', '#261a14', 'wood')
   const roofAngle = 0.52 + variant * 0.025
   const roofPanelWidth = sx * 0.64
@@ -724,6 +726,66 @@ function Building({ position, size, color, roof }: BuildingData) {
         </group>
       )}
 
+      {variant === 0 && (
+        <>
+          <mesh position={[x - sx * 0.31, ground + 0.62, z + sz / 2 + 0.13]}>
+            <boxGeometry args={[0.62, 0.78, 0.2]} />
+            <meshStandardMaterial color="#69645c" roughness={1} />
+          </mesh>
+          <mesh position={[x + sx * 0.31, ground + 0.62, z + sz / 2 + 0.13]}>
+            <boxGeometry args={[0.62, 0.78, 0.2]} />
+            <meshStandardMaterial color="#69645c" roughness={1} />
+          </mesh>
+        </>
+      )}
+
+      {variant === 1 && (
+        <group position={[x, ground + sy + roofRise * 0.55, z + sz * 0.08]}>
+          <mesh position={[0, 0, 0.2]}>
+            <boxGeometry args={[1.2, 0.9, 0.78]} />
+            <meshStandardMaterial map={wallTexture} color="#f2efe5" roughness={1} />
+          </mesh>
+          <mesh position={[0, 0.56, 0.2]} rotation-z={0.38}>
+            <boxGeometry args={[0.82, 0.12, 0.96]} />
+            <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
+          </mesh>
+          <mesh position={[0.42, 0.56, 0.2]} rotation-z={-0.38}>
+            <boxGeometry args={[0.82, 0.12, 0.96]} />
+            <meshStandardMaterial map={roofTexture} color="#ffffff" roughness={1} />
+          </mesh>
+          <mesh position={[0, 0.03, 0.61]}>
+            <planeGeometry args={[0.48, 0.42]} />
+            <meshStandardMaterial color="#c7a968" emissive="#704717" emissiveIntensity={0.25} roughness={0.45} />
+          </mesh>
+        </group>
+      )}
+
+      {variant === 2 && (
+        <group position={[x - sx * 0.33, ground + 0.7, z + sz / 2 + 0.25]}>
+          <mesh position={[0, 0.22, 0]}>
+            <boxGeometry args={[0.9, 1.4, 0.38]} />
+            <meshStandardMaterial map={getPixelTexture('house-stone-course', '#767168', '#4b4842', 'brick')} color="#aaa49a" roughness={1} />
+          </mesh>
+          <mesh position={[0, -0.58, 0.08]}>
+            <boxGeometry args={[1.15, 0.18, 0.72]} />
+            <meshStandardMaterial color="#5b554d" roughness={1} />
+          </mesh>
+        </group>
+      )}
+
+      {variant === 3 && (
+        <>
+          <mesh position={[x, ground + sy * 0.39, z + sz / 2 + 0.12]} rotation-z={0.58}>
+            <boxGeometry args={[sx * 1.02, 0.1, 0.1]} />
+            <meshStandardMaterial color={beamColor} roughness={1} />
+          </mesh>
+          <mesh position={[x, ground + sy * 0.39, z + sz / 2 + 0.13]} rotation-z={-0.58}>
+            <boxGeometry args={[sx * 1.02, 0.1, 0.1]} />
+            <meshStandardMaterial color={beamColor} roughness={1} />
+          </mesh>
+        </>
+      )}
+
       {hasAnnex && (
         <group position={[x + sx / 2 + 1.0, ground, z + sz * 0.1]}>
           <mesh position={[0, 1.05, 0]}>
@@ -740,15 +802,15 @@ function Building({ position, size, color, roof }: BuildingData) {
   )
 }
 
-function makeNpcTexture(data: NpcData) {
+function makeNpcTexture(data: NpcData, frame = 0) {
   const canvas = document.createElement('canvas')
-  canvas.width = 64
-  canvas.height = 96
+  canvas.width = 96
+  canvas.height = 144
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas unavailable')
 
   ctx.imageSmoothingEnabled = false
-  ctx.clearRect(0, 0, 64, 96)
+  ctx.clearRect(0, 0, 96, 144)
 
   const shade = (hex: string, amount: number) => {
     const c = new THREE.Color(hex)
@@ -762,103 +824,128 @@ function makeNpcTexture(data: NpcData) {
   const shirtLight = shade(data.shirt, 0.08)
   const trouserLight = shade(data.trousers, 0.05)
 
-  ctx.fillStyle = '#00000044'
-  ctx.fillRect(15, 88, 34, 4)
+  const bob = frame % 2
+  const legShift = bob ? 3 : 0
+  const armShift = bob ? 2 : -2
 
-  // Legs and boots.
+  ctx.fillStyle = '#0000003d'
+  ctx.fillRect(22, 132, 52, 6)
+
+  // Legs and boots: narrower, longer and slightly offset between animation frames.
   ctx.fillStyle = data.trousers
-  ctx.fillRect(21, 61, 9, 25)
-  ctx.fillRect(35, 61, 9, 25)
+  ctx.fillRect(31 - legShift, 91, 13, 38)
+  ctx.fillRect(52 + legShift, 91, 13, 38)
   ctx.fillStyle = trouserLight
-  ctx.fillRect(22, 61, 3, 22)
-  ctx.fillRect(36, 61, 3, 22)
+  ctx.fillRect(33 - legShift, 92, 4, 33)
+  ctx.fillRect(54 + legShift, 92, 4, 33)
   ctx.fillStyle = '#17191d'
-  ctx.fillRect(18, 84, 13, 6)
-  ctx.fillRect(34, 84, 13, 6)
+  ctx.fillRect(26 - legShift, 125, 20, 9)
+  ctx.fillRect(50 + legShift, 125, 20, 9)
 
-  // Torso with tapered silhouette.
+  // Torso, shoulders and coat/shirt shaping.
   ctx.fillStyle = shirtDark
-  ctx.fillRect(15, 38, 35, 26)
-  ctx.fillRect(18, 34, 29, 32)
+  ctx.fillRect(22, 57, 52, 39)
+  ctx.fillRect(27, 51, 42, 48)
   ctx.fillStyle = data.shirt
-  ctx.fillRect(20, 35, 24, 29)
+  ctx.fillRect(31, 52, 34, 43)
   ctx.fillStyle = shirtLight
-  ctx.fillRect(21, 36, 5, 26)
-
-  // Arms.
+  ctx.fillRect(33, 54, 7, 38)
   ctx.fillStyle = shirtDark
-  ctx.fillRect(10, 39, 9, 22)
-  ctx.fillRect(46, 39, 9, 22)
+  ctx.fillRect(17 + armShift, 59, 12, 34)
+  ctx.fillRect(67 - armShift, 59, 12, 34)
+
+  // Hands.
   ctx.fillStyle = data.skin
-  ctx.fillRect(11, 58, 8, 9)
-  ctx.fillRect(46, 58, 8, 9)
+  ctx.fillRect(18 + armShift, 88, 11, 13)
+  ctx.fillRect(67 - armShift, 88, 11, 13)
   ctx.fillStyle = skinLight
-  ctx.fillRect(12, 59, 3, 7)
-  ctx.fillRect(47, 59, 3, 7)
+  ctx.fillRect(20 + armShift, 89, 4, 10)
+  ctx.fillRect(69 - armShift, 89, 4, 10)
 
   // Neck.
   ctx.fillStyle = skinDark
-  ctx.fillRect(27, 30, 11, 7)
+  ctx.fillRect(40, 44, 17, 11)
   ctx.fillStyle = data.skin
-  ctx.fillRect(29, 30, 8, 7)
+  ctx.fillRect(43, 43, 13, 12)
 
-  // Head / jaw.
+  // Head with a less square jaw and cheek shading.
   ctx.fillStyle = skinDark
-  ctx.fillRect(20, 11, 25, 22)
-  ctx.fillRect(23, 7, 20, 29)
+  ctx.fillRect(30, 16, 38, 31)
+  ctx.fillRect(34, 10, 31, 41)
   ctx.fillStyle = data.skin
-  ctx.fillRect(23, 10, 20, 22)
-  ctx.fillRect(26, 31, 14, 4)
+  ctx.fillRect(34, 15, 31, 31)
+  ctx.fillRect(38, 44, 23, 6)
   ctx.fillStyle = skinLight
-  ctx.fillRect(24, 11, 5, 17)
-
-  // Hair silhouette.
-  ctx.fillStyle = data.hair
-  ctx.fillRect(21, 5, 24, 8)
-  ctx.fillRect(18, 9, 8, 15)
-  ctx.fillRect(40, 8, 7, 12)
-  ctx.fillRect(25, 3, 16, 5)
-  if (data.name === 'Mara' || data.name === 'Iris') {
-    ctx.fillRect(17, 12, 6, 19)
-    ctx.fillRect(43, 12, 6, 18)
-  }
-  if (data.name === 'Elias') {
-    ctx.fillRect(19, 4, 28, 6)
-    ctx.fillRect(20, 2, 21, 5)
-  }
-
-  // Brows / eyes / nose / mouth.
-  ctx.fillStyle = shade(data.hair, -0.08)
-  ctx.fillRect(25, 17, 6, 2)
-  ctx.fillRect(36, 17, 6, 2)
-  ctx.fillStyle = '#252329'
-  ctx.fillRect(27, 20, 3, 4)
-  ctx.fillRect(37, 20, 3, 4)
+  ctx.fillRect(36, 16, 7, 25)
   ctx.fillStyle = skinDark
-  ctx.fillRect(32, 22, 3, 5)
-  ctx.fillStyle = '#7d4b43'
-  ctx.fillRect(29, 28, 10, 2)
+  ctx.fillRect(61, 20, 5, 20)
 
-  // Small clothing details to stop every NPC reading as the same template.
+  // Hair silhouettes vary per NPC.
+  ctx.fillStyle = data.hair
+  if (data.name === 'Mara') {
+    ctx.fillRect(27, 13, 11, 34)
+    ctx.fillRect(59, 13, 11, 33)
+    ctx.fillRect(31, 7, 36, 13)
+    ctx.fillRect(38, 4, 25, 8)
+  } else if (data.name === 'Iris') {
+    ctx.fillRect(29, 8, 39, 14)
+    ctx.fillRect(26, 16, 10, 27)
+    ctx.fillRect(63, 14, 8, 24)
+    ctx.fillRect(33, 4, 29, 7)
+  } else if (data.name === 'Elias') {
+    ctx.fillRect(29, 8, 40, 12)
+    ctx.fillRect(32, 4, 31, 8)
+    ctx.fillRect(29, 18, 8, 16)
+  } else if (data.name === 'Tomas') {
+    ctx.fillRect(30, 7, 37, 13)
+    ctx.fillRect(28, 17, 8, 16)
+    ctx.fillRect(61, 15, 7, 13)
+  } else {
+    ctx.fillRect(31, 7, 37, 13)
+    ctx.fillRect(28, 15, 9, 20)
+    ctx.fillRect(62, 15, 7, 14)
+  }
+
+  // Facial features.
+  ctx.fillStyle = shade(data.hair, -0.08)
+  ctx.fillRect(38, 25, 8, 3)
+  ctx.fillRect(53, 25, 8, 3)
+  ctx.fillStyle = '#252329'
+  ctx.fillRect(40, 29, 4, 6)
+  ctx.fillRect(55, 29, 4, 6)
+  ctx.fillStyle = skinDark
+  ctx.fillRect(48, 31, 4, 8)
+  ctx.fillStyle = '#7d4b43'
+  ctx.fillRect(43, 41, 14, 3)
+
+  // Individual clothing identity.
   if (data.name === 'Nora') {
     ctx.fillStyle = '#c4a37e'
-    ctx.fillRect(29, 38, 7, 16)
+    ctx.fillRect(44, 57, 10, 27)
     ctx.fillStyle = '#8c714f'
-    ctx.fillRect(31, 40, 3, 14)
+    ctx.fillRect(47, 60, 4, 24)
   } else if (data.name === 'Elias') {
     ctx.fillStyle = '#273b45'
-    ctx.fillRect(20, 37, 24, 4)
-    ctx.fillRect(30, 37, 4, 27)
+    ctx.fillRect(31, 55, 34, 6)
+    ctx.fillRect(46, 55, 6, 41)
+    ctx.fillStyle = '#9b835e'
+    ctx.fillRect(39, 72, 20, 4)
   } else if (data.name === 'Mara') {
     ctx.fillStyle = '#b293c7'
-    ctx.fillRect(24, 39, 16, 4)
-    ctx.fillRect(30, 43, 4, 17)
+    ctx.fillRect(36, 59, 25, 6)
+    ctx.fillRect(46, 65, 6, 26)
+    ctx.fillStyle = '#4b3656'
+    ctx.fillRect(28, 87, 40, 5)
   } else if (data.name === 'Tomas') {
     ctx.fillStyle = '#49452b'
-    ctx.fillRect(17, 42, 31, 5)
+    ctx.fillRect(27, 63, 43, 7)
+    ctx.fillStyle = '#7c6840'
+    ctx.fillRect(32, 83, 33, 4)
   } else {
     ctx.fillStyle = '#91a1c5'
-    ctx.fillRect(22, 38, 20, 3)
+    ctx.fillRect(34, 57, 29, 5)
+    ctx.fillStyle = '#35415f'
+    ctx.fillRect(31, 82, 35, 5)
   }
 
   const texture = new THREE.CanvasTexture(canvas)
@@ -875,9 +962,9 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
   const heading = useRef(0.9 + index * 1.75)
   const changeTimer = useRef(1.2 + index * 0.8)
   const walkTime = useRef(index)
-  const texture = useMemo(() => makeNpcTexture(data), [data])
+  const textures = useMemo(() => [makeNpcTexture(data, 0), makeNpcTexture(data, 1)], [data])
 
-  useEffect(() => () => texture.dispose(), [texture])
+  useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures])
 
   useFrame((_, delta) => {
     const npc = root.current
@@ -886,7 +973,8 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
 
     if (activeNpcIndex === index) {
       npc.position.y = terrainHeight(npc.position.x, npc.position.z)
-      visual.position.y = 1.16
+      visual.position.y = 1.18
+      visual.material.map = textures[0]
       return
     }
 
@@ -912,7 +1000,12 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
 
     npc.position.y = terrainHeight(npc.position.x, npc.position.z)
     walkTime.current += delta * 7
-    visual.position.y = 1.16 + Math.abs(Math.sin(walkTime.current)) * 0.035
+    visual.position.y = 1.18 + Math.abs(Math.sin(walkTime.current)) * 0.028
+    const frame = Math.floor(walkTime.current * 1.6) % 2
+    if (visual.material.map !== textures[frame]) {
+      visual.material.map = textures[frame]
+      visual.material.needsUpdate = true
+    }
   })
 
   useEffect(() => {
@@ -928,8 +1021,12 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
       ref={root}
       position={[data.start[0], terrainHeight(data.start[0], data.start[1]), data.start[1]]}
     >
-      <sprite ref={sprite} position={[0, 1.16, 0]} scale={[1.18, 2.25, 1]} raycast={() => null}>
-        <spriteMaterial map={texture} transparent alphaTest={0.18} depthWrite toneMapped={false} />
+      <mesh position={[0, 0.025, 0]} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[0.42, 16]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.22} depthWrite={false} />
+      </mesh>
+      <sprite ref={sprite} position={[0, 1.18, 0]} scale={[1.28, 2.42, 1]} raycast={() => null}>
+        <spriteMaterial map={textures[0]} transparent alphaTest={0.18} depthWrite toneMapped={false} />
       </sprite>
 
       <mesh
@@ -950,9 +1047,36 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
 
 function GrassField() {
   const mesh = useRef<THREE.InstancedMesh>(null)
-  const count = 900
+  const count = 1450
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const color = useMemo(() => new THREE.Color(), [])
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    const positions: number[] = []
+    const indices: number[] = []
+    const blade = (angle: number, height: number, width: number, lean: number) => {
+      const base = positions.length / 3
+      const dx = Math.cos(angle) * width
+      const dz = Math.sin(angle) * width
+      const lx = Math.cos(angle + Math.PI / 2) * lean
+      const lz = Math.sin(angle + Math.PI / 2) * lean
+      positions.push(
+        -dx, 0, -dz,
+         dx, 0,  dz,
+         lx, height, lz,
+      )
+      indices.push(base, base + 1, base + 2)
+    }
+    blade(0, 0.55, 0.06, 0.05)
+    blade(Math.PI * 0.66, 0.46, 0.055, -0.04)
+    blade(Math.PI * 1.33, 0.62, 0.05, 0.02)
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geo.setIndex(indices)
+    geo.computeVertexNormals()
+    return geo
+  }, [])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
 
   useEffect(() => {
     const instanced = mesh.current
@@ -961,28 +1085,29 @@ function GrassField() {
     let placed = 0
     let seedIndex = 0
 
-    while (placed < count && seedIndex < count * 8) {
-      const x = -55 + seeded(seedIndex + 500) * 110
-      const z = -55 + seeded(seedIndex + 1200) * 110
+    while (placed < count && seedIndex < count * 10) {
+      const x = -56 + seeded(seedIndex + 500) * 112
+      const z = -56 + seeded(seedIndex + 1200) * 112
       seedIndex += 1
 
       if (isVillagePath(x, z)) continue
-      if (Math.hypot(x - 31, z - 30) < 9) continue
-      if (buildings.some((b) => Math.abs(x - b.position[0]) < b.size[0] * 0.75 && Math.abs(z - b.position[1]) < b.size[2] * 0.75)) continue
+      if (Math.hypot(x - 31, z - 30) < 8.5) continue
+      if (buildings.some((b) => Math.abs(x - b.position[0]) < b.size[0] * 0.72 && Math.abs(z - b.position[1]) < b.size[2] * 0.72)) continue
 
       const y = terrainHeight(x, z)
-      const scale = 0.55 + seeded(seedIndex + 1800) * 0.8
-      dummy.position.set(x, y + 0.16 * scale, z)
-      dummy.rotation.set(
-        seeded(seedIndex + 1900) * 0.12 - 0.06,
-        seeded(seedIndex + 2000) * Math.PI * 2,
-        seeded(seedIndex + 2100) * 0.14 - 0.07,
-      )
-      dummy.scale.set(0.65 * scale, scale, 0.65 * scale)
+      const distanceFromVillage = Math.hypot(x, z)
+      const scale = 0.45 + seeded(seedIndex + 1800) * (distanceFromVillage > 24 ? 1.1 : 0.65)
+      dummy.position.set(x, y + 0.012, z)
+      dummy.rotation.set(0, seeded(seedIndex + 2000) * Math.PI * 2, 0)
+      dummy.scale.setScalar(scale)
       dummy.updateMatrix()
       instanced.setMatrixAt(placed, dummy.matrix)
 
-      color.set(placed % 3 === 0 ? '#80935d' : placed % 3 === 1 ? '#6f8352' : '#91a568')
+      color.set(
+        placed % 4 === 0 ? '#9aae69' :
+        placed % 4 === 1 ? '#71834d' :
+        placed % 4 === 2 ? '#86975a' : '#627545'
+      )
       instanced.setColorAt(placed, color)
       placed += 1
     }
@@ -993,12 +1118,84 @@ function GrassField() {
   }, [color, dummy])
 
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, count]}>
-      <coneGeometry args={[0.055, 0.42, 3]} />
-      <meshStandardMaterial roughness={1} vertexColors />
+    <instancedMesh ref={mesh} args={[geometry, undefined, count]}>
+      <meshStandardMaterial roughness={1} vertexColors side={THREE.DoubleSide} />
     </instancedMesh>
   )
 }
+
+function ReedsAndFlowers() {
+  const reedMesh = useRef<THREE.InstancedMesh>(null)
+  const flowerMesh = useRef<THREE.InstancedMesh>(null)
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+  const color = useMemo(() => new THREE.Color(), [])
+  const reedCount = 190
+  const flowerCount = 120
+
+  useEffect(() => {
+    const reeds = reedMesh.current
+    if (reeds) {
+      let placed = 0
+      for (let i = 0; i < reedCount * 3 && placed < reedCount; i += 1) {
+        const a = seeded(i + 3200) * Math.PI * 2
+        const r = 6.5 + seeded(i + 3300) * 3.2
+        const x = 31 + Math.cos(a) * r
+        const z = 30 + Math.sin(a) * r
+        const y = terrainHeight(x, z)
+        dummy.position.set(x, y + 0.42, z)
+        dummy.rotation.set(0, seeded(i + 3400) * Math.PI * 2, seeded(i + 3500) * 0.12 - 0.06)
+        dummy.scale.set(0.7, 0.7 + seeded(i + 3600) * 0.8, 0.7)
+        dummy.updateMatrix()
+        reeds.setMatrixAt(placed, dummy.matrix)
+        color.set(placed % 2 ? '#73844f' : '#8d9759')
+        reeds.setColorAt(placed, color)
+        placed += 1
+      }
+      reeds.count = placed
+      reeds.instanceMatrix.needsUpdate = true
+      if (reeds.instanceColor) reeds.instanceColor.needsUpdate = true
+    }
+
+    const flowers = flowerMesh.current
+    if (flowers) {
+      let placed = 0
+      let i = 0
+      while (placed < flowerCount && i < flowerCount * 12) {
+        const x = -24 + seeded(i + 4100) * 48
+        const z = -24 + seeded(i + 4200) * 48
+        i += 1
+        if (isVillagePath(x, z)) continue
+        if (buildings.some((b) => Math.abs(x - b.position[0]) < b.size[0] * 0.8 && Math.abs(z - b.position[1]) < b.size[2] * 0.8)) continue
+        const y = terrainHeight(x, z)
+        dummy.position.set(x, y + 0.2, z)
+        dummy.rotation.set(0, seeded(i + 4300) * Math.PI * 2, 0)
+        dummy.scale.setScalar(0.55 + seeded(i + 4400) * 0.45)
+        dummy.updateMatrix()
+        flowers.setMatrixAt(placed, dummy.matrix)
+        color.set(placed % 3 === 0 ? '#d8b55f' : placed % 3 === 1 ? '#b37ca8' : '#d6d0a5')
+        flowers.setColorAt(placed, color)
+        placed += 1
+      }
+      flowers.count = placed
+      flowers.instanceMatrix.needsUpdate = true
+      if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true
+    }
+  }, [color, dummy])
+
+  return (
+    <>
+      <instancedMesh ref={reedMesh} args={[undefined, undefined, reedCount]}>
+        <cylinderGeometry args={[0.025, 0.04, 0.9, 5]} />
+        <meshStandardMaterial roughness={1} vertexColors />
+      </instancedMesh>
+      <instancedMesh ref={flowerMesh} args={[undefined, undefined, flowerCount]}>
+        <octahedronGeometry args={[0.07, 0]} />
+        <meshBasicMaterial vertexColors toneMapped={false} />
+      </instancedMesh>
+    </>
+  )
+}
+
 
 function Crate({ x, z, rotation = 0 }: { x: number; z: number; rotation?: number }) {
   const y = terrainHeight(x, z)
@@ -1120,6 +1317,108 @@ function Signpost() {
   )
 }
 
+function Fence({ x, z, length = 5, rotation = 0 }: { x: number; z: number; length?: number; rotation?: number }) {
+  const y = terrainHeight(x, z)
+  const posts = Math.max(2, Math.round(length / 1.2))
+  return (
+    <group position={[x, y, z]} rotation-y={rotation}>
+      {Array.from({ length: posts + 1 }, (_, i) => {
+        const px = -length / 2 + (length / posts) * i
+        return (
+          <mesh key={i} position={[px, 0.62, 0]}>
+            <boxGeometry args={[0.12, 1.24, 0.12]} />
+            <meshStandardMaterial color="#5b412f" roughness={1} />
+          </mesh>
+        )
+      })}
+      <mesh position={[0, 0.82, 0]}>
+        <boxGeometry args={[length, 0.11, 0.11]} />
+        <meshStandardMaterial color="#674a35" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.42, 0]}>
+        <boxGeometry args={[length, 0.1, 0.1]} />
+        <meshStandardMaterial color="#604430" roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+function HandCart() {
+  const x = 7.3
+  const z = -3.8
+  const y = terrainHeight(x, z)
+  return (
+    <group position={[x, y, z]} rotation-y={-0.35}>
+      <mesh position={[0, 0.55, 0]}>
+        <boxGeometry args={[1.5, 0.65, 1.05]} />
+        <meshStandardMaterial map={getPixelTexture('cart-wood', '#755139', '#332219', 'wood')} color="#8d6749" roughness={1} />
+      </mesh>
+      {[-0.62, 0.62].map((xx) => (
+        <mesh key={xx} position={[xx, 0.38, 0.58]} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.34, 0.07, 6, 12]} />
+          <meshStandardMaterial color="#382921" roughness={1} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.38, -1.15]}>
+        <boxGeometry args={[0.12, 0.12, 1.8]} />
+        <meshStandardMaterial color="#5a3e2d" roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+function LanternPost({ x, z }: { x: number; z: number }) {
+  const y = terrainHeight(x, z)
+  const light = useRef<THREE.PointLight>(null)
+  useFrame(() => {
+    if (light.current) light.current.intensity = THREE.MathUtils.lerp(7.5, 0.15, worldDaylight)
+  })
+  return (
+    <group position={[x, y, z]}>
+      <mesh position={[0, 1.3, 0]}>
+        <cylinderGeometry args={[0.045, 0.07, 2.6, 8]} />
+        <meshStandardMaterial color="#232323" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 2.42, 0]}>
+        <boxGeometry args={[0.38, 0.52, 0.38]} />
+        <meshStandardMaterial color="#d8b15f" emissive="#b76d24" emissiveIntensity={1.1} roughness={0.5} />
+      </mesh>
+      <pointLight ref={light} position={[0, 2.38, 0]} color="#ffc56c" intensity={2} distance={7} decay={2} />
+    </group>
+  )
+}
+
+function AtmosphereMotes() {
+  const points = useRef<THREE.Points>(null)
+  const geometry = useMemo(() => {
+    const positions: number[] = []
+    for (let i = 0; i < 180; i += 1) {
+      positions.push(
+        -45 + seeded(i + 5100) * 90,
+        0.8 + seeded(i + 5200) * 8,
+        -45 + seeded(i + 5300) * 90,
+      )
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    return geo
+  }, [])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  useFrame((state, delta) => {
+    if (!points.current) return
+    points.current.rotation.y += delta * 0.004
+    points.current.position.y = Math.sin(state.clock.elapsedTime * 0.08) * 0.08
+  })
+
+  return (
+    <points ref={points} geometry={geometry}>
+      <pointsMaterial color="#e7d8a1" size={0.045} transparent opacity={0.22} depthWrite={false} sizeAttenuation />
+    </points>
+  )
+}
+
 function VillageProps() {
   return (
     <>
@@ -1133,6 +1432,13 @@ function VillageProps() {
       <Barrel x={-8.7} z={6.8} />
       <Barrel x={-8.15} z={6.5} />
       <Barrel x={13.4} z={7.2} />
+      <Fence x={-13.5} z={10.8} length={6.5} rotation={0.08} />
+      <Fence x={11.5} z={11.4} length={5.4} rotation={-0.12} />
+      <Fence x={-12} z={-11.5} length={5.2} rotation={0.18} />
+      <HandCart />
+      <LanternPost x={-3.2} z={-1.0} />
+      <LanternPost x={4.2} z={4.8} />
+      <LanternPost x={-7.0} z={7.4} />
     </>
   )
 }
@@ -1389,7 +1695,9 @@ export default function GameWorld() {
       <DayNight />
       <Terrain />
       <GrassField />
+      <ReedsAndFlowers />
       <VillageProps />
+      <AtmosphereMotes />
       <Pond />
       <Ruins />
       <HillMarker />
