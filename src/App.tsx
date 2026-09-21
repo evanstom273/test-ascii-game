@@ -79,7 +79,7 @@ export default function App() {
     >
       <Canvas
         shadows
-        camera={{ fov: 70, near: 0.1, far: 180, position: [0, 1.65, 8] }}
+        camera={{ fov: 70, near: 0.1, far: 260, position: [0, 2.4, 8] }}
         gl={{ antialias: false, powerPreference: 'high-performance' }}
         dpr={[1, 1.5]}
       >
@@ -90,9 +90,9 @@ export default function App() {
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-between gap-4 p-3 text-[11px] sm:text-xs">
         <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-sm">
-          <div className="font-semibold tracking-wider">ASCII 3D // PROTOTYPE 01</div>
+          <div className="font-semibold tracking-wider">ASCII 3D // PROTOTYPE 02</div>
           <div className="mt-1 text-white/70">WASD · mouse look · Shift sprint</div>
-          <div className="text-white/70">Mobile: left pad · drag right side to look</div>
+          <div className="text-white/70">Touch: left pad · drag right side to look</div>
         </div>
       </div>
 
@@ -101,7 +101,7 @@ export default function App() {
         <span className="absolute left-1/2 top-0 h-4 w-px bg-white/70" />
       </div>
 
-      <div className="absolute bottom-5 left-4 grid grid-cols-3 gap-1 sm:hidden">
+      <div className="touch-controls absolute bottom-5 left-4 grid grid-cols-3 gap-1">
         <div />
         <HoldButton name="forward">▲</HoldButton>
         <div />
@@ -110,7 +110,7 @@ export default function App() {
         <HoldButton name="right">▶</HoldButton>
       </div>
 
-      <div className="absolute bottom-5 right-4 sm:hidden">
+      <div className="touch-controls absolute bottom-5 right-4">
         <HoldButton name="sprint">RUN</HoldButton>
       </div>
     </main>
