@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useRef } from 'react'
+import * as THREE from 'three'
 import GameWorld from './game/GameWorld'
 
 type ControlName = 'forward' | 'back' | 'left' | 'right' | 'sprint'
@@ -80,7 +81,13 @@ export default function App() {
       <Canvas
         shadows
         camera={{ fov: 70, near: 0.1, far: 260, position: [0, 2.4, 8] }}
-        gl={{ antialias: false, powerPreference: 'high-performance' }}
+        gl={{
+          antialias: true,
+          powerPreference: 'high-performance',
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.1,
+        }}
+        shadows={{ type: THREE.PCFSoftShadowMap }}
         dpr={[1, 1.5]}
       >
         <Suspense fallback={null}>
