@@ -18,11 +18,14 @@ type BuildingData = {
 }
 
 type NpcData = {
+  name: string
   start: readonly [number, number]
   shirt: string
   trousers: string
   skin: string
   hair: string
+  greeting: string
+  options: readonly string[]
 }
 
 const controls: Controls = {
@@ -34,6 +37,7 @@ const controls: Controls = {
 }
 
 let worldDaylight = 1
+let activeNpcIndex: number | null = null
 
 const PLAYER_RADIUS = 0.38
 const WORLD_LIMIT = 58
@@ -189,11 +193,56 @@ for (let i = 0; i < 34; i += 1) {
 }
 
 const npcData: NpcData[] = [
-  { start: [5.5, 5.5], shirt: '#6f497f', trousers: '#303842', skin: '#c99772', hair: '#3a281f' },
-  { start: [-4, 8], shirt: '#496b7a', trousers: '#373b32', skin: '#b97f5d', hair: '#171717' },
-  { start: [11, -4], shirt: '#785349', trousers: '#2f3540', skin: '#d3a27c', hair: '#6a4a2f' },
-  { start: [-17, 12], shirt: '#6c6a42', trousers: '#34353a', skin: '#c08d69', hair: '#4b3324' },
-  { start: [18, 13], shirt: '#4d5d82', trousers: '#2f3339', skin: '#d0a17c', hair: '#2a211c' },
+  {
+    name: 'Mara',
+    start: [5.5, 5.5],
+    shirt: '#6f497f',
+    trousers: '#303842',
+    skin: '#c99772',
+    hair: '#3a281f',
+    greeting: 'Evening. You look like you are new around here.',
+    options: ['What is this place?', 'Anything interesting nearby?', 'Just passing through.'],
+  },
+  {
+    name: 'Elias',
+    start: [-4, 8],
+    shirt: '#496b7a',
+    trousers: '#373b32',
+    skin: '#b97f5d',
+    hair: '#171717',
+    greeting: 'Careful on the western trail. The old ruins are not as empty as they look.',
+    options: ['Tell me about the ruins.', 'Where does this road go?', 'I will keep that in mind.'],
+  },
+  {
+    name: 'Nora',
+    start: [11, -4],
+    shirt: '#785349',
+    trousers: '#2f3540',
+    skin: '#d3a27c',
+    hair: '#6a4a2f',
+    greeting: 'Nice weather for once. It usually turns before nightfall.',
+    options: ['Does the weather get bad?', 'What is up on the hill?', 'See you around.'],
+  },
+  {
+    name: 'Tomas',
+    start: [-17, 12],
+    shirt: '#6c6a42',
+    trousers: '#34353a',
+    skin: '#c08d69',
+    hair: '#4b3324',
+    greeting: 'If you are heading out, stick to the paths until you know the ground.',
+    options: ['Why?', 'Where can I find people?', 'Thanks.'],
+  },
+  {
+    name: 'Iris',
+    start: [18, 13],
+    shirt: '#4d5d82',
+    trousers: '#2f3339',
+    skin: '#d0a17c',
+    hair: '#2a211c',
+    greeting: 'The pond is quiet today. I prefer it that way.',
+    options: ['What happens there?', 'Do you live here?', 'I should get going.'],
+  },
 ]
 
 function collidesWithWorld(x: number, z: number, radius = PLAYER_RADIUS) {
@@ -236,6 +285,8 @@ function PlayerController() {
   const velocity = useRef(new THREE.Vector3())
   const forward = useMemo(() => new THREE.Vector3(), [])
   const right = useMemo(() => new THREE.Vector3(), [])
+  const focusTarget = useRef<THREE.Vector3 | null>(null)
+  const interactionActive = useRef(false)
 
   useEffect(() => {
     camera.rotation.order = 'YXZ'
@@ -253,6 +304,7 @@ function PlayerController() {
     const up = (event: KeyboardEvent) => onKey(event, false)
 
     const mouseMove = (event: MouseEvent) => {
+      if (interactionActive.current) return
       if (document.pointerLockElement !== gl.domElement) return
       yaw.current -= event.movementX * 0.0024
       pitch.current -= event.movementY * 0.0024
@@ -260,6 +312,7 @@ function PlayerController() {
     }
 
     const click = () => {
+      if (interactionActive.current) return
       if (window.matchMedia('(pointer:fine)').matches && document.pointerLockElement == null) {
         gl.domElement.requestPointerLock?.()
       }
@@ -271,10 +324,28 @@ function PlayerController() {
     }
 
     const customLook = (event: Event) => {
+      if (interactionActive.current) return
       const { dx, dy } = (event as CustomEvent<{ dx: number; dy: number }>).detail
       yaw.current -= dx * 0.006
       pitch.current -= dy * 0.004
       pitch.current = THREE.MathUtils.clamp(pitch.current, -1.35, 1.35)
+    }
+
+    const focusNpc = (event: Event) => {
+      const { x, y, z } = (event as CustomEvent<{ x: number; y: number; z: number }>).detail
+      focusTarget.current = new THREE.Vector3(x, y, z)
+      interactionActive.current = true
+      controls.forward = false
+      controls.back = false
+      controls.left = false
+      controls.right = false
+      controls.sprint = false
+      if (document.pointerLockElement === gl.domElement) document.exitPointerLock?.()
+    }
+
+    const endDialogue = () => {
+      focusTarget.current = null
+      interactionActive.current = false
     }
 
     window.addEventListener('keydown', down)
@@ -282,6 +353,8 @@ function PlayerController() {
     window.addEventListener('mousemove', mouseMove)
     window.addEventListener('game-control', customControl)
     window.addEventListener('game-look', customLook)
+    window.addEventListener('game-focus-npc', focusNpc)
+    window.addEventListener('game-end-dialogue', endDialogue)
     gl.domElement.addEventListener('click', click)
 
     return () => {
@@ -290,16 +363,31 @@ function PlayerController() {
       window.removeEventListener('mousemove', mouseMove)
       window.removeEventListener('game-control', customControl)
       window.removeEventListener('game-look', customLook)
+      window.removeEventListener('game-focus-npc', focusNpc)
+      window.removeEventListener('game-end-dialogue', endDialogue)
       gl.domElement.removeEventListener('click', click)
     }
   }, [camera, gl])
 
   useFrame((_, delta) => {
+    if (interactionActive.current && focusTarget.current) {
+      const dx = focusTarget.current.x - camera.position.x
+      const dy = focusTarget.current.y - camera.position.y
+      const dz = focusTarget.current.z - camera.position.z
+      const horizontal = Math.hypot(dx, dz)
+      const targetYaw = Math.atan2(dx, dz)
+      const targetPitch = -Math.atan2(dy, Math.max(0.001, horizontal))
+
+      const angleDelta = Math.atan2(Math.sin(targetYaw - yaw.current), Math.cos(targetYaw - yaw.current))
+      yaw.current += angleDelta * Math.min(1, delta * 7)
+      pitch.current = THREE.MathUtils.lerp(pitch.current, targetPitch, Math.min(1, delta * 7))
+    }
+
     camera.rotation.y = yaw.current
     camera.rotation.x = pitch.current
 
-    const z = Number(controls.back) - Number(controls.forward)
-    const x = Number(controls.right) - Number(controls.left)
+    const z = interactionActive.current ? 0 : Number(controls.back) - Number(controls.forward)
+    const x = interactionActive.current ? 0 : Number(controls.right) - Number(controls.left)
     const moving = x !== 0 || z !== 0
 
     forward.set(Math.sin(yaw.current), 0, Math.cos(yaw.current))
@@ -590,6 +678,11 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
     const npc = sprite.current
     if (!npc) return
 
+    if (activeNpcIndex === index) {
+      npc.position.y = terrainHeight(npc.position.x, npc.position.z) + 1.18
+      return
+    }
+
     changeTimer.current -= delta
     if (changeTimer.current <= 0) {
       heading.current += THREE.MathUtils.randFloatSpread(1.4)
@@ -617,11 +710,44 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
       Math.abs(Math.sin(walkTime.current)) * 0.035
   })
 
+  const beginDialogue = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+    const npc = sprite.current
+    if (!npc) return
+
+    activeNpcIndex = index
+    window.dispatchEvent(new CustomEvent('game-focus-npc', {
+      detail: {
+        x: npc.position.x,
+        y: npc.position.y + 0.35,
+        z: npc.position.z,
+      },
+    }))
+
+    window.dispatchEvent(new CustomEvent('game-npc-dialogue', {
+      detail: {
+        index,
+        name: data.name,
+        greeting: data.greeting,
+        options: data.options,
+      },
+    }))
+  }
+
+  useEffect(() => {
+    const end = () => {
+      if (activeNpcIndex === index) activeNpcIndex = null
+    }
+    window.addEventListener('game-end-dialogue', end)
+    return () => window.removeEventListener('game-end-dialogue', end)
+  }, [index])
+
   return (
     <sprite
       ref={sprite}
       position={[data.start[0], terrainHeight(data.start[0], data.start[1]) + 1.18, data.start[1]]}
       scale={[1.45, 2.2, 1]}
+      onPointerDown={beginDialogue}
     >
       <spriteMaterial map={texture} transparent alphaTest={0.18} depthWrite toneMapped={false} />
     </sprite>
