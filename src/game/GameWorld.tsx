@@ -158,11 +158,12 @@ function getPixelTexture(
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.magFilter = THREE.NearestFilter
-  texture.minFilter = THREE.NearestMipmapNearestFilter
+  texture.minFilter = THREE.LinearMipmapLinearFilter
+  texture.generateMipmaps = true
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(4, 4)
-  texture.anisotropy = 2
+  texture.repeat.set(2, 2)
+  texture.anisotropy = 4
   textureCache.set(key, texture)
   return texture
 }
@@ -454,16 +455,16 @@ function Building({ position, size, color, roof }: BuildingData) {
             <boxGeometry args={[0.94, 1.08, 0.11]} />
             <meshStandardMaterial map={woodTexture} color="#503728" roughness={1} />
           </mesh>
-          <mesh position={[0, 0, 0.065]}>
+          <mesh position={[0, 0, 0.075]}>
             <planeGeometry args={[0.7, 0.82]} />
             <meshBasicMaterial color="#d9b76e" toneMapped={false} />
           </mesh>
-          <mesh position={[0, 0, 0.075]}>
-            <boxGeometry args={[0.055, 0.82, 0.03]} />
+          <mesh position={[0, 0, 0.105]}>
+            <boxGeometry args={[0.055, 0.82, 0.025]} />
             <meshBasicMaterial color="#4a3428" />
           </mesh>
-          <mesh position={[0, 0, 0.076]}>
-            <boxGeometry args={[0.7, 0.055, 0.03]} />
+          <mesh position={[0, 0, 0.106]}>
+            <boxGeometry args={[0.7, 0.055, 0.025]} />
             <meshBasicMaterial color="#4a3428" />
           </mesh>
         </group>
@@ -720,9 +721,13 @@ function VillagePaths() {
 
 function DayNight() {
   const sun = useRef<THREE.DirectionalLight>(null)
+  const moon = useRef<THREE.DirectionalLight>(null)
+  const hemi = useRef<THREE.HemisphereLight>(null)
+  const ambient = useRef<THREE.AmbientLight>(null)
   const { scene } = useThree()
   const clock = useRef(0.18)
-  const night = useMemo(() => new THREE.Color('#070914'), [])
+  const night = useMemo(() => new THREE.Color('#050711'), [])
+  const dawn = useMemo(() => new THREE.Color('#9a6f68'), [])
   const day = useMemo(() => new THREE.Color('#7898b8'), [])
   const sky = useMemo(() => new THREE.Color(), [])
 
@@ -730,33 +735,63 @@ function DayNight() {
     clock.current = (clock.current + delta * 0.012) % 1
     const angle = clock.current * Math.PI * 2 - Math.PI / 2
     const height = Math.sin(angle)
-    const daylight = THREE.MathUtils.clamp((height + 0.18) / 0.9, 0.05, 1)
+    const daylight = THREE.MathUtils.smoothstep(height, -0.12, 0.35)
+    const twilight = 1 - Math.min(1, Math.abs(height) * 2.8)
+    const nightAmount = 1 - daylight
 
     if (sun.current) {
-      sun.current.position.set(Math.cos(angle) * 55, height * 50, Math.sin(angle) * 40)
-      sun.current.intensity = 0.2 + daylight * 2.1
-      sun.current.color.set(daylight > 0.45 ? '#fff0cf' : '#d88965')
+      sun.current.position.set(Math.cos(angle) * 55, Math.max(4, height * 55), Math.sin(angle) * 42)
+      sun.current.intensity = daylight * 3.2
+      sun.current.color.set(daylight < 0.45 ? '#ffad78' : '#fff0d0')
     }
 
-    sky.copy(night).lerp(day, daylight)
+    if (moon.current) {
+      moon.current.position.set(-Math.cos(angle) * 45, Math.max(8, -height * 42), -Math.sin(angle) * 34)
+      moon.current.intensity = nightAmount * 0.32
+    }
+
+    if (hemi.current) {
+      hemi.current.intensity = 0.12 + daylight * 0.72
+      hemi.current.color.set(daylight > 0.25 ? '#b8cee3' : '#53617b')
+      hemi.current.groundColor.set(daylight > 0.25 ? '#4b4632' : '#171823')
+    }
+
+    if (ambient.current) {
+      ambient.current.intensity = 0.025 + daylight * 0.09
+    }
+
+    sky.copy(night)
+    if (daylight > 0.05) sky.lerp(day, daylight)
+    if (twilight > 0.01 && daylight < 0.8) sky.lerp(dawn, twilight * 0.22)
     scene.background = sky
-    scene.fog = new THREE.FogExp2(sky, 0.011 + (1 - daylight) * 0.009)
+    scene.fog = new THREE.FogExp2(sky, 0.009 + nightAmount * 0.012)
   })
 
   return (
     <>
-      <hemisphereLight args={['#aab7c8', '#30301f', 0.62]} />
+      <ambientLight ref={ambient} intensity={0.06} color="#d9e1ea" />
+      <hemisphereLight ref={hemi} args={['#b8cee3', '#4b4632', 0.7]} />
       <directionalLight
         ref={sun}
         castShadow
-        intensity={2}
+        intensity={2.8}
         position={[20, 35, 15]}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
-        shadow-camera-left={-45}
-        shadow-camera-right={45}
-        shadow-camera-top={45}
-        shadow-camera-bottom={-45}
+        shadow-camera-left={-42}
+        shadow-camera-right={42}
+        shadow-camera-top={42}
+        shadow-camera-bottom={-42}
+        shadow-camera-near={1}
+        shadow-camera-far={130}
+        shadow-bias={-0.00015}
+        shadow-normalBias={0.045}
+      />
+      <directionalLight
+        ref={moon}
+        intensity={0}
+        color="#8496c9"
+        position={[-20, 25, -15]}
       />
     </>
   )
