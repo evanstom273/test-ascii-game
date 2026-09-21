@@ -38,3 +38,18 @@ canvas {
 @media (pointer: coarse), (any-pointer: coarse) {
   .touch-controls { display: grid; }
 }
+
+
+.game-vignette {
+  background:
+    radial-gradient(circle at center, transparent 52%, rgba(4, 7, 10, 0.16) 78%, rgba(2, 4, 7, 0.38) 100%),
+    linear-gradient(to bottom, rgba(255, 244, 220, 0.025), rgba(6, 9, 13, 0.04));
+  mix-blend-mode: multiply;
+}
+
+@media (max-width: 640px) {
+  .game-vignette {
+    background:
+      radial-gradient(circle at center, transparent 58%, rgba(4, 7, 10, 0.14) 82%, rgba(2, 4, 7, 0.3) 100%);
+  }
+}
