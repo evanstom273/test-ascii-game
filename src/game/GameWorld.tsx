@@ -748,31 +748,6 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
     visual.position.y = 1.18 + Math.abs(Math.sin(walkTime.current)) * 0.035
   })
 
-  const beginDialogue = (event: { stopPropagation: () => void }) => {
-    event.stopPropagation()
-    const npc = root.current
-    if (!npc) return
-
-    activeNpcIndex = index
-
-    window.dispatchEvent(new CustomEvent('game-focus-npc', {
-      detail: {
-        x: npc.position.x,
-        y: npc.position.y + 1.45,
-        z: npc.position.z,
-      },
-    }))
-
-    window.dispatchEvent(new CustomEvent('game-npc-dialogue', {
-      detail: {
-        index,
-        name: data.name,
-        greeting: data.greeting,
-        options: data.options,
-      },
-    }))
-  }
-
   useEffect(() => {
     const end = () => {
       if (activeNpcIndex === index) activeNpcIndex = null
@@ -792,11 +767,14 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
 
       <mesh
         position={[0, 1.15, 0]}
-        onPointerDown={beginDialogue}
-        onPointerOver={() => { document.body.style.cursor = 'pointer' }}
-        onPointerOut={() => { document.body.style.cursor = '' }}
+        userData={{
+          npcIndex: index,
+          npcName: data.name,
+          npcGreeting: data.greeting,
+          npcOptions: data.options,
+        }}
       >
-        <boxGeometry args={[0.8, 2.1, 0.5]} />
+        <boxGeometry args={[0.9, 2.15, 0.6]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>
@@ -871,6 +849,99 @@ function HillMarker() {
 }
 
 
+
+function InteractionController() {
+  const { camera, scene } = useThree()
+  const raycaster = useMemo(() => new THREE.Raycaster(), [])
+  const center = useMemo(() => new THREE.Vector2(0, 0), [])
+  const currentTarget = useRef<THREE.Object3D | null>(null)
+  const currentIndex = useRef<number | null>(null)
+  const lastReportedIndex = useRef<number | null>(null)
+  const worldPosition = useMemo(() => new THREE.Vector3(), [])
+
+  useEffect(() => {
+    const interact = () => {
+      const target = currentTarget.current
+      const index = currentIndex.current
+      if (!target || index == null || activeNpcIndex != null) return
+
+      const data = npcData[index]
+      if (!data) return
+
+      const root = target.parent
+      if (!root) return
+
+      root.getWorldPosition(worldPosition)
+      activeNpcIndex = index
+
+      window.dispatchEvent(new CustomEvent('game-focus-npc', {
+        detail: {
+          x: worldPosition.x,
+          y: worldPosition.y + 1.45,
+          z: worldPosition.z,
+        },
+      }))
+
+      window.dispatchEvent(new CustomEvent('game-npc-dialogue', {
+        detail: {
+          index,
+          name: data.name,
+          greeting: data.greeting,
+          options: [...data.options],
+        },
+      }))
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 'e') interact()
+    }
+
+    window.addEventListener('game-interact', interact)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('game-interact', interact)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [worldPosition])
+
+  useFrame(() => {
+    if (activeNpcIndex != null) {
+      currentTarget.current = null
+      currentIndex.current = null
+      if (lastReportedIndex.current !== null) {
+        lastReportedIndex.current = null
+        window.dispatchEvent(new CustomEvent('game-interact-target', { detail: null }))
+      }
+      return
+    }
+
+    raycaster.setFromCamera(center, camera)
+    raycaster.far = 4.5
+
+    const hits = raycaster.intersectObjects(scene.children, true)
+    const hit = hits.find((entry) => typeof entry.object.userData.npcIndex === 'number')
+
+    const target = hit?.object ?? null
+    const index = target ? Number(target.userData.npcIndex) : null
+
+    currentTarget.current = target
+    currentIndex.current = index
+
+    if (index !== lastReportedIndex.current) {
+      lastReportedIndex.current = index
+      window.dispatchEvent(new CustomEvent('game-interact-target', {
+        detail: index == null
+          ? null
+          : {
+              index,
+              name: String(target?.userData.npcName ?? npcData[index]?.name ?? 'NPC'),
+            },
+      }))
+    }
+  })
+
+  return null
+}
 
 function DayNight() {
   const sun = useRef<THREE.DirectionalLight>(null)
@@ -958,6 +1029,7 @@ export default function GameWorld() {
   return (
     <>
       <PlayerController />
+      <InteractionController />
       <DayNight />
       <Terrain />
       <Pond />
