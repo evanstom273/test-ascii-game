@@ -537,14 +537,42 @@ function Building({ position, size, color, roof }: BuildingData) {
   const roofRise = Math.tan(roofAngle) * (sx / 2)
   const roofY = ground + sy + roofRise * 0.48
 
-  const gableShape = useMemo(() => {
-    const shape = new THREE.Shape()
-    shape.moveTo(-sx / 2, 0)
-    shape.lineTo(sx / 2, 0)
-    shape.lineTo(0, roofRise)
-    shape.closePath()
-    return shape
+  const gableGeometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([
+        -sx / 2, 0, 0,
+         sx / 2, 0, 0,
+         0, roofRise, 0,
+      ], 3),
+    )
+    geometry.setAttribute(
+      'uv',
+      new THREE.Float32BufferAttribute([
+        0, 0,
+        1, 0,
+        0.5, 1,
+      ], 2),
+    )
+    geometry.setIndex([0, 1, 2])
+    geometry.computeVertexNormals()
+    return geometry
   }, [sx, roofRise])
+
+  const gableTexture = useMemo(() => {
+    const texture = wallTexture.clone()
+    texture.repeat.set(2, Math.max(0.7, 2 * roofRise / sy))
+    texture.needsUpdate = true
+    return texture
+  }, [wallTexture, roofRise, sy])
+
+  useEffect(() => {
+    return () => {
+      gableGeometry.dispose()
+      gableTexture.dispose()
+    }
+  }, [gableGeometry, gableTexture])
 
   const leftWindow = useRef<THREE.MeshStandardMaterial>(null)
   const rightWindow = useRef<THREE.MeshStandardMaterial>(null)
@@ -567,13 +595,11 @@ function Building({ position, size, color, roof }: BuildingData) {
         <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} />
       </mesh>
 
-      <mesh position={[x, ground + sy + 0.002, z + sz / 2 + 0.004]}>
-        <shapeGeometry args={[gableShape]} />
-        <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
+      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z + sz / 2 + 0.006]}>
+        <meshStandardMaterial map={gableTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[x, ground + sy + 0.002, z - sz / 2 - 0.004]} rotation-y={Math.PI}>
-        <shapeGeometry args={[gableShape]} />
-        <meshStandardMaterial map={wallTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
+      <mesh geometry={gableGeometry} position={[x, ground + sy + 0.002, z - sz / 2 - 0.006]} rotation-y={Math.PI}>
+        <meshStandardMaterial map={gableTexture} color="#ffffff" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
 
       <mesh position={[x - sx * 0.235, roofY, z]} rotation={[0, 0, roofAngle]}>
@@ -677,6 +703,7 @@ function makeNpcTexture(data: NpcData) {
 }
 
 function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
+  const root = useRef<THREE.Group>(null)
   const sprite = useRef<THREE.Sprite>(null)
   const heading = useRef(0.9 + index * 1.75)
   const changeTimer = useRef(1.2 + index * 0.8)
@@ -686,11 +713,13 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
   useEffect(() => () => texture.dispose(), [texture])
 
   useFrame((_, delta) => {
-    const npc = sprite.current
-    if (!npc) return
+    const npc = root.current
+    const visual = sprite.current
+    if (!npc || !visual) return
 
     if (activeNpcIndex === index) {
-      npc.position.y = terrainHeight(npc.position.x, npc.position.z) + 1.18
+      npc.position.y = terrainHeight(npc.position.x, npc.position.z)
+      visual.position.y = 1.18
       return
     }
 
@@ -714,23 +743,22 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
       changeTimer.current = 0.35
     }
 
+    npc.position.y = terrainHeight(npc.position.x, npc.position.z)
     walkTime.current += delta * 7
-    npc.position.y =
-      terrainHeight(npc.position.x, npc.position.z) +
-      1.18 +
-      Math.abs(Math.sin(walkTime.current)) * 0.035
+    visual.position.y = 1.18 + Math.abs(Math.sin(walkTime.current)) * 0.035
   })
 
   const beginDialogue = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
-    const npc = sprite.current
+    const npc = root.current
     if (!npc) return
 
     activeNpcIndex = index
+
     window.dispatchEvent(new CustomEvent('game-focus-npc', {
       detail: {
         x: npc.position.x,
-        y: npc.position.y + 0.35,
+        y: npc.position.y + 1.45,
         z: npc.position.z,
       },
     }))
@@ -754,16 +782,24 @@ function BillboardNpc({ data, index }: { data: NpcData; index: number }) {
   }, [index])
 
   return (
-    <sprite
-      ref={sprite}
-      position={[data.start[0], terrainHeight(data.start[0], data.start[1]) + 1.18, data.start[1]]}
-      scale={[1.65, 2.45, 1]}
-      onPointerDown={beginDialogue}
-      onPointerOver={() => { document.body.style.cursor = 'pointer' }}
-      onPointerOut={() => { document.body.style.cursor = '' }}
+    <group
+      ref={root}
+      position={[data.start[0], terrainHeight(data.start[0], data.start[1]), data.start[1]]}
     >
-      <spriteMaterial map={texture} transparent alphaTest={0.18} depthWrite toneMapped={false} />
-    </sprite>
+      <sprite ref={sprite} position={[0, 1.18, 0]} scale={[1.45, 2.2, 1]} raycast={() => null}>
+        <spriteMaterial map={texture} transparent alphaTest={0.18} depthWrite toneMapped={false} />
+      </sprite>
+
+      <mesh
+        position={[0, 1.15, 0]}
+        onPointerDown={beginDialogue}
+        onPointerOver={() => { document.body.style.cursor = 'pointer' }}
+        onPointerOut={() => { document.body.style.cursor = '' }}
+      >
+        <boxGeometry args={[0.8, 2.1, 0.5]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+    </group>
   )
 }
 
