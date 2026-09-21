@@ -20,11 +20,20 @@ function HoldButton({
       className="game-button"
       onPointerDown={(event) => {
         event.preventDefault()
+        event.stopPropagation()
         event.currentTarget.setPointerCapture(event.pointerId)
         sendControl(name, true)
       }}
-      onPointerUp={() => sendControl(name, false)}
-      onPointerCancel={() => sendControl(name, false)}
+      onPointerUp={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        sendControl(name, false)
+      }}
+      onPointerCancel={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        sendControl(name, false)
+      }}
       onPointerLeave={() => sendControl(name, false)}
       aria-label={name}
     >
@@ -41,10 +50,12 @@ export default function App() {
   return (
     <main
       className="relative h-full w-full bg-slate-950"
+      onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse') return
         if (event.clientX < window.innerWidth * 0.42) return
 
+        event.preventDefault()
         lookPointer.current = event.pointerId
         lastX.current = event.clientX
         lastY.current = event.clientY
@@ -52,6 +63,7 @@ export default function App() {
       }}
       onPointerMove={(event) => {
         if (lookPointer.current !== event.pointerId) return
+        event.preventDefault()
         const dx = event.clientX - lastX.current
         const dy = event.clientY - lastY.current
         lastX.current = event.clientX
@@ -70,11 +82,6 @@ export default function App() {
         camera={{ fov: 70, near: 0.1, far: 180, position: [0, 1.65, 8] }}
         gl={{ antialias: false, powerPreference: 'high-performance' }}
         dpr={[1, 1.5]}
-        onPointerMissed={() => {
-          if (document.pointerLockElement == null) {
-            document.querySelector('canvas')?.requestPointerLock?.()
-          }
-        }}
       >
         <Suspense fallback={null}>
           <GameWorld />
